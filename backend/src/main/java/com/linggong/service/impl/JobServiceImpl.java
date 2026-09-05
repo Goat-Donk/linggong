@@ -10,8 +10,12 @@ import com.linggong.dto.UserDTO;
 import com.linggong.entity.Job;
 import com.linggong.mapper.JobMapper;
 import com.linggong.service.IJobService;
+import com.linggong.utils.CacheClient;
+import com.linggong.utils.RedisConstants;
 import com.linggong.utils.UserHolder;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * 岗位服务实现。
@@ -25,6 +29,12 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobService {
+
+    private final CacheClient cacheClient;
+
+    public JobServiceImpl(CacheClient cacheClient) {
+        this.cacheClient = cacheClient;
+    }
 
     @Override
     public Result publish(JobFormDTO form) {
@@ -61,6 +71,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         // 且 hutool 默认忽略 null，为 null 的字段保留原值（与 UserUpdateDTO 语义一致）
         BeanUtil.copyProperties(form, job);
         updateById(job);
+        // 删缓存，保证详情下次查询读到最新数据（缓存一致性）
+        cacheClient.delete(RedisConstants.CACHE_JOB_KEY + id);
         return Result.ok();
     }
 
@@ -75,12 +87,17 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         }
         job.setStatus(1);
         updateById(job);
+        // 删缓存，保证详情下次查询读到最新状态（缓存一致性）
+        cacheClient.delete(RedisConstants.CACHE_JOB_KEY + id);
         return Result.ok();
     }
 
     @Override
     public Result queryById(Long id) {
-        Job job = getById(id);
+        // 走缓存：穿透（空对象）+ 击穿（互斥锁）+ 雪崩（随机 TTL）由 CacheClient 统一处理
+        Job job = cacheClient.queryWithMutex(
+                RedisConstants.CACHE_JOB_KEY, id, Job.class,
+                this::getById, RedisConstants.CACHE_JOB_TTL, TimeUnit.MINUTES);
         if (job == null) {
             return Result.fail("岗位不存在");
         }
