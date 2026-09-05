@@ -208,13 +208,14 @@ d:\linggong\
 - Phase 1 第 1 步：实体 + DTO + Mapper —— `User`/`UserInfo` 实体、`LoginFormDTO`(带手机号/验证码校验)/`UserDTO`(安全返回)、`UserMapper`/`UserInfoMapper`，`mvn compile` 通过。
 - Phase 1 第 2 步：通用工具 —— `RedisConstants`（login:code / login:token 前缀 + TTL）、`UserHolder`（ThreadLocal）、`RegexUtils`（手机号校验），`mvn compile` 通过。登录存 token 用 `StringRedisTemplate` + hutool `JSONUtil`，自定义 `RedisTemplate` 留到 Phase 2 缓存再加。
 - Phase 1 第 3 步：Service 层 —— `IUserService`/`UserServiceImpl`（发验证码 + 登录 + 退出，首次登录自动注册）、`IUserInfoService`/`UserInfoServiceImpl`（`getByUserId` 按 user_id 查、`saveOrUpdateByUserId` 保存/更新），`mvn compile` 通过。
+- Phase 1 第 4 步：Controller + 双拦截器 —— `UserController`（`/user/code`、`/user/login`、`/user/me`、`/user/logout`、`/user/{id}`、`/user/info/{id}`、`/user/update`）、`RefreshTokenInterceptor`（解析 token + 刷新有效期）、`LoginInterceptor`（未登录返回 401）、`MvcConfig`（注册 + 排除登录路径）、`UserUpdateDTO`，`mvn compile` 通过。
 - 环境：编译时再次触发内存不足（WSL2/Docker 吃满 4GB 导致 `fork` 失败），已 `wsl --shutdown` 释放内存后编译通过。**注意**：WSL 关闭后 Docker Desktop 后端已停，MySQL/Redis/RabbitMQ 容器需在 Phase 1 第 5 步启动验证前重新拉起。
 
 ### 🔄 进行中
-- Phase 1 登录 —— 第 3 步（Service 层）已完成，进行第 4 步。
+- Phase 1 登录 —— 第 4 步（Controller + 双拦截器）已完成，进行第 5 步。
 
 ### ⏭ 下一步
-- Phase 1 第 4 步：Controller + 双拦截器 —— `UserController`（code/login/me/logout/资料）、`RefreshTokenInterceptor` + `LoginInterceptor`、`MvcConfig`（拦截器注册）。
+- Phase 1 第 5 步：启动验证 —— 重新拉起 MySQL/Redis/RabbitMQ 容器 → 启动应用 → curl 端到端测登录（发码 → 登录拿 token → /user/me → 改资料 → 退出）。
 
 ---
 
