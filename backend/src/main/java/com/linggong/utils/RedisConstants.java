@@ -47,6 +47,9 @@ public final class RedisConstants {
     /** Feed 收件箱 key 前缀，完整 key = feed:{userId}（ZSet，member=动态 id，score=时间戳） */
     public static final String FEED_KEY = "feed:";
 
+    /** 签到 key 前缀，完整 key = sign:{userId}:{yyyyMM}（Bitmap，offset=当月第几天-1） */
+    public static final String USER_SIGN_KEY = "sign:";
+
     private RedisConstants() {
     }
 }

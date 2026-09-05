@@ -232,11 +232,13 @@ d:\linggong\
 - Phase 4 第 2 步：晒单动态 —— `Blog` 实体 + `BlogMapper`（incrementLike/decrementLike 防负数）、`BlogDTO`（动态字段 + isLike + 发布者头像昵称）、`BlogFormDTO`（发布校验）、`IBlogService`/`BlogServiceImpl`（发布 userId 登录态注入、我的动态用 UserHolder 填发布者避免查库、点赞 Redis Set + DB 同步幂等切换）、`BlogController`（POST /blog、GET /blog/my、PUT /blog/like/{id}）、`RedisConstants` 加 blog:liked: 前缀。`mvn compile` 通过。
 - Phase 4 第 3 步：Feed 推流 + 滚动分页 —— `ScrollResult`（list/minTime/offset 游标）、发布动态推粉丝收件箱 `feed:{userId}`（ZSet，score=时间戳）、关注时滚动推送对方最近 3 条历史动态（score 用 createTime 毫秒）、关注的人动态滚动分页（lastId+offset，回查动态用 Map 重排保序 + 批量查发布者避免 N+1）、`BlogController` 加 GET /blog/of/follow、`RedisConstants` 加 feed: 前缀。`mvn compile` 通过。
 
+- Phase 4 第 4 步：每日签到（Bitmap）—— `RedisConstants` 加 sign: 前缀、`IUserService`/`UserServiceImpl` 加 `sign()`（SETBIT 记当月第几天）+ `signCount()`（BITFIELD GET u{day} 取本月签到位，从最低位往前数连续 1）、`UserController` 加 POST /user/sign、GET /user/sign/count。`mvn compile` 通过。
+
 ### 🔄 进行中
-- Phase 4 社交+Feed+签到 —— 第 3 步已完成，进行第 4 步。
+- Phase 4 社交+Feed+签到 —— 第 4 步已完成，进行第 5 步（启动验证）。
 
 ### ⏭ 下一步
-- Phase 4 第 4 步：每日签到（Bitmap）—— Redis Bitmap 记录签到、统计连续签到天数、签到接口。
+- Phase 4 第 5 步：启动验证 —— 端到端测关注/动态/推流/滚动分页/签到全链路，验证通过后合回 main。
 
 ---
 
