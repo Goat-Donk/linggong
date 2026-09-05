@@ -206,12 +206,13 @@ d:\linggong\
 - Phase 0 第 5 步：编写 `db.sql`（8 张建表脚本 + 岗位分类种子数据；报名记录表 id 用雪花算法、唯一键防重复报名）。
 - Phase 0 第 6 步：空跑验证通过 —— 执行 `db.sql` 建 8 张表，应用启动成功（Tomcat 8080，约 5.8s，无报错）。
 - Phase 1 第 1 步：实体 + DTO + Mapper —— `User`/`UserInfo` 实体、`LoginFormDTO`(带手机号/验证码校验)/`UserDTO`(安全返回)、`UserMapper`/`UserInfoMapper`，`mvn compile` 通过。
+- Phase 1 第 2 步：通用工具 —— `RedisConstants`（login:code / login:token 前缀 + TTL）、`UserHolder`（ThreadLocal）、`RegexUtils`（手机号校验），`mvn compile` 通过。登录存 token 用 `StringRedisTemplate` + hutool `JSONUtil`，自定义 `RedisTemplate` 留到 Phase 2 缓存再加。
 
 ### 🔄 进行中
-- Phase 1 登录 —— 第 1 步（实体 + DTO + Mapper）已完成，进行第 2 步。
+- Phase 1 登录 —— 第 2 步（通用工具）已完成，进行第 3 步。
 
 ### ⏭ 下一步
-- Phase 1 第 2 步：通用工具 + 配置 —— `RedisConstants`（key 前缀/TTL）、`UserHolder`（ThreadLocal）、`RegexUtils`（手机号校验）、`RedisConfig`（RedisTemplate 序列化）。
+- Phase 1 第 3 步：Service 层 —— `IUserService`/`UserServiceImpl`（发验证码 + 登录 + 退出）、`IUserInfoService`/`UserInfoServiceImpl`（资料查询/修改）。
 
 ---
 
