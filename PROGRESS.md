@@ -240,11 +240,13 @@ d:\linggong\
 
 - Phase 5 第 2 步：文件上传 —— `UploadController`（POST /upload/image：空校验 + 图片类型白名单 + UUID 唯一文件名 + mkdirs + transferTo，返回 /uploads/{filename}）、`MvcConfig` 加 `addResourceHandlers` 映射 /uploads/** → 本地目录（`Paths.toUri` 规避 Windows 反斜杠）、`application.yml` 加 multipart 5MB/10MB + `linggong.upload.dir`。`mvn compile` 通过。
 
+- Phase 5 第 3 步：Knife4j 接口文档 —— pom 加 `knife4j-openapi3-jakarta-spring-boot-starter 4.5.0`（排除自带 springdoc）+ `springdoc-openapi-starter-webmvc-ui 2.8.5`（覆盖，否则 knife4j 增强模式与 Boot 3.5 冲突报 NoSuchMethodError）；`Knife4jConfig`（OpenAPI 标题/描述 + 全局 `authorization` header APIKEY，页面右上角可 Authorize）；8 个 Controller 全加 `@Tag`/`@Operation`/`@Parameter`，Request DTO 加 `@Schema` 字段注解，实体/返回 DTO 加类级 `@Schema`；`LoginInterceptor` 放行 /doc.html /v3/api-docs /webjars /swagger-ui /error。踩坑修复：不能设 `springdoc.swagger-ui.enabled: false`（会把 knife4j 依赖的 `/v3/api-docs/swagger-config` 关掉，导致文档页拿不到分组）。验证：/doc.html、/v3/api-docs、/v3/api-docs/swagger-config 全 200，8 个 tag、30 个 path 正常生成。
+
 ### 🔄 进行中
-- Phase 5 互评+上传+收尾 —— 第 2 步（文件上传）已完成，进行第 3 步。
+- Phase 5 互评+上传+收尾 —— 第 3 步（Knife4j 文档）已完成，进行第 4 步（启动验证）。
 
 ### ⏭ 下一步
-- Phase 5 第 3 步：Knife4j 接口文档。
+- Phase 5 第 4 步：启动验证（互评 + 文件上传 + Knife4j 文档全链路回归），通过后合回 main 并推远程、删本地分支、更新记忆。
 
 ---
 
