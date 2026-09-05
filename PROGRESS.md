@@ -224,12 +224,13 @@ d:\linggong\
 - Phase 2 第 6 步：启动验证通过 —— 端到端 curl 测岗位全链路全部成功：① 岗位详情（未登录放行）② 附近搜索（按距离升序、distance 正确）③ 分类分页（total 正确）④ 关键词搜索 ⑤ 下架（成功）⑥ 下架后 GEO 移除（附近搜索不再返回该岗位）⑦ 下架后详情 status=1（缓存已删）⑧ role=0 用户发布被拒（"只有雇主才能发布岗位"）。修复：`LoginInterceptor` 放行 GET /job 浏览类接口（未登录也能逛岗位，写操作仍需登录）。**Phase 2 完成。**
 - Phase 3 第 1 步：报名实体 + Mapper + 分布式 ID —— `JobApplication` 实体（id 雪花算法 INPUT，status 0待确认/1已录用/2已完成/3已取消）、`JobApplicationMapper`（空 BaseMapper）、`RedisIdWorker`（雪花算法简化版：1符号位+31时间戳+32序列号，序列号用 Redis INCR 按天自增）。`mvn compile` 通过。
 - Phase 3 第 2 步：RabbitMQ 组件 + 秒杀 Lua —— `MqConstants`（交换机/队列/路由 key 常量）、`RabbitConfig`（交换机 job.direct + 主队列 job.application 带死信 + 死信队列 job.application.dlq + 绑定）、`RedisScriptConfig`（静态加载 seckill.lua 为 Bean）、`resources/lua/seckill.lua`（原子：查名额 → 一人一单 → 扣名额 → 记标记，返回 0/1/2）、`RedisConstants` 加 apply:stock: / apply:order: / apply id 前缀。`mvn compile` 通过。
+- Phase 3 第 3 步：报名核心 Service + Controller —— `ApplyMessage`（MQ 消息体 jobId/workerId/orderId）、`IJobApplicationService`/`JobApplicationServiceImpl`（报名：岗位校验 → 名额懒加载预热 → Lua 原子扣名额 → 生成雪花单号 → 发 MQ）、`JobApplicationController`（POST /job-application/{jobId}）、`JobApplicationConsumer`（@RabbitListener 监听主队列，幂等落单 + 扣 DB 名额 + 手动 ACK，失败 basicNack 进死信）、`JobMapper.deductHeadcount`（headcount-1 且 >0 防负数）、`JobServiceImpl.publish` 发布岗位预热名额、`application.yml` 配 manual ack。`mvn compile` 通过。
 
 ### 🔄 进行中
-- Phase 3 报名+秒杀+MQ —— 第 2 步已完成，进行第 3 步。
+- Phase 3 报名+秒杀+MQ —— 第 3 步已完成，进行第 4 步。
 
 ### ⏭ 下一步
-- Phase 3 第 3 步：报名核心 Service + Controller —— 报名接口走 Lua 原子扣名额 + 发 MQ、MQ 消费者幂等落单（写 tb_job_application + 扣 DB headcount）、名额预热、防重复报名。
+- Phase 3 第 4 步：报名查询 + 雇主审核 —— 我的报名记录（分页/状态机）、雇主审核报名（通过/拒绝）、防重复报名边界校验。
 
 ---
 

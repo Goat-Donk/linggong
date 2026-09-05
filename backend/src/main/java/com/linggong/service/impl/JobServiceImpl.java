@@ -73,9 +73,10 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         job.setEmployerId(user.getId());
         job.setStatus(0);
         save(job);
-        // 4. 新岗位 id 加入布隆过滤器 + 写入 GEO（附近搜索用）
+        // 4. 新岗位 id 加入布隆过滤器 + 写入 GEO（附近搜索用）+ 预热报名名额
         jobBloomFilter.add(job.getId());
         addJobGeo(job);
+        preheatApplyStock(job);
         return Result.ok(job.getId());
     }
 
@@ -234,6 +235,15 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
                 RedisConstants.GEO_JOB_KEY + job.getCategoryId(),
                 new Point(job.getX(), job.getY()),
                 String.valueOf(job.getId()));
+    }
+
+    /**
+     * 预热报名名额到 Redis（报名秒杀用），value 存岗位名额。
+     */
+    private void preheatApplyStock(Job job) {
+        stringRedisTemplate.opsForValue().setIfAbsent(
+                RedisConstants.APPLY_STOCK_KEY + job.getId(),
+                String.valueOf(job.getHeadcount()));
     }
 
     /**
