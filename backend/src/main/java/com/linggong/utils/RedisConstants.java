@@ -38,6 +38,18 @@ public final class RedisConstants {
     /** 报名记录 id 的 RedisIdWorker 前缀，完整 key = icr:apply:{yyyy:MM:dd} */
     public static final String APPLY_ID_PREFIX = "apply";
 
+    /** 关注集合 key 前缀，完整 key = follows:{userId}（Set，存被关注用户 id） */
+    public static final String FOLLOWS_KEY = "follows:";
+
+    /** 动态点赞用户集合 key 前缀，完整 key = blog:liked:{blogId}（Set，存点赞用户 id） */
+    public static final String BLOG_LIKED_KEY = "blog:liked:";
+
+    /** Feed 收件箱 key 前缀，完整 key = feed:{userId}（ZSet，member=动态 id，score=时间戳） */
+    public static final String FEED_KEY = "feed:";
+
+    /** 签到 key 前缀，完整 key = sign:{userId}:{yyyyMM}（Bitmap，offset=当月第几天-1） */
+    public static final String USER_SIGN_KEY = "sign:";
+
     private RedisConstants() {
     }
 }

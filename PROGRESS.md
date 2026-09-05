@@ -166,7 +166,7 @@ d:\linggong\
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
-| **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
+| **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
 | **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
 
@@ -228,12 +228,20 @@ d:\linggong\
 - Phase 3 第 4 步：报名查询 + 雇主审核 —— `JobApplicationDTO`（报名字段 + 岗位简要信息）、`myApplications`（我的报名分页，批量查岗位避免 N+1）、`audit`（雇主审核：归属校验 + 状态机 0→1通过/0→3拒绝 + 防重复审核）、`JobApplicationController` 加 GET /my、PUT /{id}/approve、PUT /{id}/reject。`mvn compile` 通过。
 - Phase 3 第 5 步：启动验证通过 —— 端到端 11 项全通过：发布岗位预热名额（apply:stock 正确）→ 工人报名 Lua 秒杀（名额扣减 + 一人一单标记）→ MQ 异步落单（tb_job_application 写入 + DB headcount 扣减）→ 我的报名（含岗位信息）→ 重复报名拦截 → 报名自己岗位拦截 → 雇主审核通过（0→1）→ 重复审核拦截 → 名额满拦截 → 拒绝审核（0→3）→ 越权审核拦截。**Phase 3 完成。**
 
+- Phase 4 第 1 步：关注功能 —— `Follow` 实体 + `FollowMapper`、`IFollowService`/`FollowServiceImpl`（关注/取关 DB+Redis 双写、是否已关注、共同关注 SINTER 交集）、`FollowController`（PUT /follow/{id}/{isFollow}、GET /follow/or/not/{id}、GET /follow/common/{id}）、`RedisConstants` 加 follows: 前缀。`mvn compile` 通过。
+- Phase 4 第 2 步：晒单动态 —— `Blog` 实体 + `BlogMapper`（incrementLike/decrementLike 防负数）、`BlogDTO`（动态字段 + isLike + 发布者头像昵称）、`BlogFormDTO`（发布校验）、`IBlogService`/`BlogServiceImpl`（发布 userId 登录态注入、我的动态用 UserHolder 填发布者避免查库、点赞 Redis Set + DB 同步幂等切换）、`BlogController`（POST /blog、GET /blog/my、PUT /blog/like/{id}）、`RedisConstants` 加 blog:liked: 前缀。`mvn compile` 通过。
+- Phase 4 第 3 步：Feed 推流 + 滚动分页 —— `ScrollResult`（list/minTime/offset 游标）、发布动态推粉丝收件箱 `feed:{userId}`（ZSet，score=时间戳）、关注时滚动推送对方最近 3 条历史动态（score 用 createTime 毫秒）、关注的人动态滚动分页（lastId+offset，回查动态用 Map 重排保序 + 批量查发布者避免 N+1）、`BlogController` 加 GET /blog/of/follow、`RedisConstants` 加 feed: 前缀。`mvn compile` 通过。
+
+- Phase 4 第 4 步：每日签到（Bitmap）—— `RedisConstants` 加 sign: 前缀、`IUserService`/`UserServiceImpl` 加 `sign()`（SETBIT 记当月第几天）+ `signCount()`（BITFIELD GET u{day} 取本月签到位，从最低位往前数连续 1）、`UserController` 加 POST /user/sign、GET /user/sign/count。`mvn compile` 通过。
+
+- Phase 4 第 5 步：启动验证通过 —— 端到端 8 项全通过：① 签到（0→1→幂等 1，未登录 401，bitmap 位正确）② 发布动态+我的动态 ③ 关注/取关（DB+Redis 双写一致）④ 是否关注 ⑤ 共同关注 ⑥ 推流（关注滚入历史 3 条 + 发布推粉丝）⑦ 滚动分页（lastId+offset 无丢无重）⑧ 点赞（切换+DB 同步）。**Phase 4 完成。**
+
 ### 🔄 进行中
-- 无（Phase 3 已全部完成，待合并分支后进入 Phase 4）。
+- 无（Phase 4 已全部完成，待合回 main）。
 
 ### ⏭ 下一步
-- Phase 3 收尾：提交 feat/apply-mq → 合回 main（--no-ff）→ push → 删分支。
-- Phase 4 社交+Feed+签到：关注/取关、晒单动态、点赞、推流 Feed、滚动分页、每日签到（Bitmap）。
+- 合回 feat/social-feed → main（--no-ff）并 push、删分支。
+- Phase 5 互评+上传+收尾：互评、文件上传、Knife4j 文档。
 
 ---
 

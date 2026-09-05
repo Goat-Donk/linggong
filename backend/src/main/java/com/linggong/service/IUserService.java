@@ -29,4 +29,14 @@ public interface IUserService extends IService<User> {
      * 刷新 Redis 中 token 对应的用户缓存（修改资料后调用，避免 /user/me 返回旧昵称）。
      */
     void refreshUserCache(String token, Long userId);
+
+    /**
+     * 每日签到（Redis Bitmap 记录，key=sign:{userId}:{yyyyMM}，offset=当月第几天-1）。
+     */
+    Result sign();
+
+    /**
+     * 统计本月连续签到天数（从今天往前数连续签到天数）。
+     */
+    Result signCount();
 }
