@@ -12,6 +12,12 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 岗位/分类的浏览类 GET 接口放行：未登录也能浏览岗位（对齐黑马点评开放 /shop/** 查询）
+        // 写操作（POST/PUT/DELETE）不在此列，仍需登录校验
+        String uri = request.getRequestURI();
+        if ("GET".equalsIgnoreCase(request.getMethod()) && uri.startsWith("/job")) {
+            return true;
+        }
         if (UserHolder.getUser() == null) {
             // 未登录，返回 401 + 统一格式的 JSON 提示
             response.setStatus(401);

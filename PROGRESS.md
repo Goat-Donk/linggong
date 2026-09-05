@@ -164,7 +164,7 @@ d:\linggong\
 |---|---|---|---|
 | **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ✅ 完成 |
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
-| **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ⬜ 未开始 |
+| **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ⬜ 未开始 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
@@ -221,12 +221,14 @@ d:\linggong\
 - Phase 2 第 3 步：岗位详情缓存（穿透 + 击穿）—— 新增 `CacheClient`（set 随机 TTL 防雪崩 / queryWithPassThrough 空对象防穿透 / queryWithMutex 互斥锁防击穿 / delete 缓存失效）、`RedisConstants` 加 cache:job: 与 lock: 常量，`queryById` 改走缓存。自审修复：改/下架岗位后删缓存（缓存一致性）+ 修正黑马点评互斥锁误删锁的瑕疵。`mvn compile` 通过。
 - Phase 2 第 4 步：缓存击穿进阶（逻辑过期）+ 布隆过滤器 —— `RedisData` 逻辑过期包装、`CacheClient` 加 setWithLogicalExpire/queryWithLogicalExpire（异步重建线程池）、`RedissonConfig`（RedissonClient）、`JobBloomFilter`（启动预载岗位 id，初始化失败降级）、`queryById` 改走布隆预判 + 逻辑过期查询（未预热兜底）、publish 新岗位入布隆。`mvn compile` 通过。
 - Phase 2 第 5 步：附近搜索（Redis GEO）—— `RedisConstants` 加 geo:job: 常量、`IJobService.queryNearby`、`JobController /job/nearby`、`JobServiceImpl` 注入 StringRedisTemplate：发布写 GEO / 编辑先删旧分类再加新分类 / 下架移除 GEO、`queryNearby` 用 GEOSEARCH + WITHDIST 按距离升序分页。`mvn compile` 通过。
+- Phase 2 第 6 步：启动验证通过 —— 端到端 curl 测岗位全链路全部成功：① 岗位详情（未登录放行）② 附近搜索（按距离升序、distance 正确）③ 分类分页（total 正确）④ 关键词搜索 ⑤ 下架（成功）⑥ 下架后 GEO 移除（附近搜索不再返回该岗位）⑦ 下架后详情 status=1（缓存已删）⑧ role=0 用户发布被拒（"只有雇主才能发布岗位"）。修复：`LoginInterceptor` 放行 GET /job 浏览类接口（未登录也能逛岗位，写操作仍需登录）。**Phase 2 完成。**
 
 ### 🔄 进行中
-- Phase 2 岗位+缓存 —— 第 5 步（附近搜索 GEO）已完成，进行第 6 步。
+- 无（Phase 2 已全部完成，待合并分支后进入 Phase 3）。
 
 ### ⏭ 下一步
-- Phase 2 第 6 步：启动验证 —— 拉起 MySQL/Redis/RabbitMQ 容器 → 启动应用 → curl 端到端测岗位全链路（发布 → 详情缓存 → 附近搜索 → 分类分页 → 搜索 → 下架）。
+- Phase 2 收尾：提交 feat/job-cache → 合回 main（--no-ff）→ push → 删分支。
+- Phase 3 报名+秒杀+MQ：报名岗位、限量秒杀（Lua 原子扣名额 + 一人一单）、RabbitMQ 异步落单、雇主审核、防重复报名。
 
 ---
 
