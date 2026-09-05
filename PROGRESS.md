@@ -238,11 +238,13 @@ d:\linggong\
 
 - Phase 5 第 1 步：互评 —— `JobEvaluation` 实体 + `JobEvaluationMapper`、`EvaluationFormDTO`（评分 1-5 校验）+ `EvaluationDTO`（含评价/被评人昵称头像）、`IJobEvaluationService`/`JobEvaluationServiceImpl`（发布：岗位存在 + 不能评自己 + 雇佣双方关系 + 工人已报名 + 防重复评价；查询：分页 + 批量查用户避免 N+1）、`EvaluationController`（POST /evaluation、GET /evaluation/job/{jobId}）。`mvn compile` 通过。
 
+- Phase 5 第 2 步：文件上传 —— `UploadController`（POST /upload/image：空校验 + 图片类型白名单 + UUID 唯一文件名 + mkdirs + transferTo，返回 /uploads/{filename}）、`MvcConfig` 加 `addResourceHandlers` 映射 /uploads/** → 本地目录（`Paths.toUri` 规避 Windows 反斜杠）、`application.yml` 加 multipart 5MB/10MB + `linggong.upload.dir`。`mvn compile` 通过。
+
 ### 🔄 进行中
-- Phase 5 互评+上传+收尾 —— 第 1 步（互评）已完成，进行第 2 步。
+- Phase 5 互评+上传+收尾 —— 第 2 步（文件上传）已完成，进行第 3 步。
 
 ### ⏭ 下一步
-- Phase 5 第 2 步：文件上传 —— 头像/岗位图/晒单图本地存储 + 静态资源映射。
+- Phase 5 第 3 步：Knife4j 接口文档。
 
 ---
 

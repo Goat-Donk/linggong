@@ -42,6 +42,12 @@ spring:
       simple:
         acknowledge-mode: manual
 
+  # ---------- 文件上传 ----------
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
 # ---------- MyBatis-Plus ----------
 mybatis-plus:
   configuration:
@@ -52,3 +58,8 @@ mybatis-plus:
 logging:
   level:
     com.linggong: debug
+
+# ---------- 自定义配置 ----------
+linggong:
+  upload:
+    dir: ${user.dir}/uploads/
