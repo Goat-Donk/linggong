@@ -229,12 +229,13 @@ d:\linggong\
 - Phase 3 第 5 步：启动验证通过 —— 端到端 11 项全通过：发布岗位预热名额（apply:stock 正确）→ 工人报名 Lua 秒杀（名额扣减 + 一人一单标记）→ MQ 异步落单（tb_job_application 写入 + DB headcount 扣减）→ 我的报名（含岗位信息）→ 重复报名拦截 → 报名自己岗位拦截 → 雇主审核通过（0→1）→ 重复审核拦截 → 名额满拦截 → 拒绝审核（0→3）→ 越权审核拦截。**Phase 3 完成。**
 
 - Phase 4 第 1 步：关注功能 —— `Follow` 实体 + `FollowMapper`、`IFollowService`/`FollowServiceImpl`（关注/取关 DB+Redis 双写、是否已关注、共同关注 SINTER 交集）、`FollowController`（PUT /follow/{id}/{isFollow}、GET /follow/or/not/{id}、GET /follow/common/{id}）、`RedisConstants` 加 follows: 前缀。`mvn compile` 通过。
+- Phase 4 第 2 步：晒单动态 —— `Blog` 实体 + `BlogMapper`（incrementLike/decrementLike 防负数）、`BlogDTO`（动态字段 + isLike + 发布者头像昵称）、`BlogFormDTO`（发布校验）、`IBlogService`/`BlogServiceImpl`（发布 userId 登录态注入、我的动态用 UserHolder 填发布者避免查库、点赞 Redis Set + DB 同步幂等切换）、`BlogController`（POST /blog、GET /blog/my、PUT /blog/like/{id}）、`RedisConstants` 加 blog:liked: 前缀。`mvn compile` 通过。
 
 ### 🔄 进行中
-- Phase 4 社交+Feed+签到 —— 第 1 步已完成，进行第 2 步。
+- Phase 4 社交+Feed+签到 —— 第 2 步已完成，进行第 3 步。
 
 ### ⏭ 下一步
-- Phase 4 第 2 步：晒单动态 —— Blog 实体 + Mapper、发布动态、我的动态、点赞（Redis Set 记录点赞用户 + 点赞数）。
+- Phase 4 第 3 步：Feed 推流 + 滚动分页 —— 发布动态推送粉丝收件箱（ZSet）、关注时推送历史动态、滚动分页 ScrollResult（lastId + offset）、关注的人动态查询。
 
 ---
 

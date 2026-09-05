@@ -41,6 +41,9 @@ public final class RedisConstants {
     /** 关注集合 key 前缀，完整 key = follows:{userId}（Set，存被关注用户 id） */
     public static final String FOLLOWS_KEY = "follows:";
 
+    /** 动态点赞用户集合 key 前缀，完整 key = blog:liked:{blogId}（Set，存点赞用户 id） */
+    public static final String BLOG_LIKED_KEY = "blog:liked:";
+
     private RedisConstants() {
     }
 }
