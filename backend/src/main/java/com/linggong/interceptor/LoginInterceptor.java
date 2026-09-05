@@ -22,6 +22,8 @@ public class LoginInterceptor implements HandlerInterceptor {
                     || uri.startsWith("/v3/api-docs")
                     || uri.startsWith("/webjars")
                     || uri.startsWith("/swagger-ui")
+                    // 上传的图片是公开静态资源（头像/岗位图/晒单图），未登录也要能访问
+                    || uri.startsWith("/uploads")
                     // /error 是 Spring 异常处理的内部转发，放行以保留真实错误码（否则会误报 401）
                     || uri.startsWith("/error"))) {
             return true;
