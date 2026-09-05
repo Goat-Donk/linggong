@@ -3,6 +3,7 @@ package com.linggong.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
@@ -12,6 +13,7 @@ import lombok.Data;
  * 运行期基本不变，所以后面可以直接做 List 全量缓存。
  */
 @Data
+@Schema(description = "岗位分类")
 @TableName("tb_job_category")
 public class JobCategory {
 

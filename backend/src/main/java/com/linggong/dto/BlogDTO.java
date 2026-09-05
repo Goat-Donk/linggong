@@ -1,5 +1,6 @@
 package com.linggong.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -8,6 +9,7 @@ import java.time.LocalDateTime;
  * 动态展示对象：动态字段 + 当前用户是否点赞 + 发布者简要信息。
  */
 @Data
+@Schema(description = "动态展示对象")
 public class BlogDTO {
 
     private Long id;

@@ -1,6 +1,7 @@
 package com.linggong.dto;
 
 import com.linggong.entity.Job;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -11,6 +12,7 @@ import lombok.EqualsAndHashCode;
  * 附近搜索（GEO）时由 Redis 返回的距离（单位米），普通查询下为 null。
  */
 @Data
+@Schema(description = "岗位返回对象（含距离）")
 @EqualsAndHashCode(callSuper = true)
 public class JobDTO extends Job {
 

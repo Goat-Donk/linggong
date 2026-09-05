@@ -167,7 +167,7 @@ d:\linggong\
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
-| **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
+| **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ✅ 完成 |
 | **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
 
 ---
@@ -236,12 +236,20 @@ d:\linggong\
 
 - Phase 4 第 5 步：启动验证通过 —— 端到端 8 项全通过：① 签到（0→1→幂等 1，未登录 401，bitmap 位正确）② 发布动态+我的动态 ③ 关注/取关（DB+Redis 双写一致）④ 是否关注 ⑤ 共同关注 ⑥ 推流（关注滚入历史 3 条 + 发布推粉丝）⑦ 滚动分页（lastId+offset 无丢无重）⑧ 点赞（切换+DB 同步）。**Phase 4 完成。**
 
+- Phase 5 第 1 步：互评 —— `JobEvaluation` 实体 + `JobEvaluationMapper`、`EvaluationFormDTO`（评分 1-5 校验）+ `EvaluationDTO`（含评价/被评人昵称头像）、`IJobEvaluationService`/`JobEvaluationServiceImpl`（发布：岗位存在 + 不能评自己 + 雇佣双方关系 + 工人已报名 + 防重复评价；查询：分页 + 批量查用户避免 N+1）、`EvaluationController`（POST /evaluation、GET /evaluation/job/{jobId}）。`mvn compile` 通过。
+
+- Phase 5 第 2 步：文件上传 —— `UploadController`（POST /upload/image：空校验 + 图片类型白名单 + UUID 唯一文件名 + mkdirs + transferTo，返回 /uploads/{filename}）、`MvcConfig` 加 `addResourceHandlers` 映射 /uploads/** → 本地目录（`Paths.toUri` 规避 Windows 反斜杠）、`application.yml` 加 multipart 5MB/10MB + `linggong.upload.dir`。`mvn compile` 通过。
+
+- Phase 5 第 3 步：Knife4j 接口文档 —— pom 加 `knife4j-openapi3-jakarta-spring-boot-starter 4.5.0`（排除自带 springdoc）+ `springdoc-openapi-starter-webmvc-ui 2.8.5`（覆盖，否则 knife4j 增强模式与 Boot 3.5 冲突报 NoSuchMethodError）；`Knife4jConfig`（OpenAPI 标题/描述 + 全局 `authorization` header APIKEY，页面右上角可 Authorize）；8 个 Controller 全加 `@Tag`/`@Operation`/`@Parameter`，Request DTO 加 `@Schema` 字段注解，实体/返回 DTO 加类级 `@Schema`；`LoginInterceptor` 放行 /doc.html /v3/api-docs /webjars /swagger-ui /error。踩坑修复：不能设 `springdoc.swagger-ui.enabled: false`（会把 knife4j 依赖的 `/v3/api-docs/swagger-config` 关掉，导致文档页拿不到分组）。验证：/doc.html、/v3/api-docs、/v3/api-docs/swagger-config 全 200，8 个 tag、30 个 path 正常生成。
+
+- Phase 5 第 4 步：启动验证通过 —— 端到端 19 项全通过：登录/设角色 → 发布岗位 → 报名（MQ 异步落单）→ 雇主审核 → 互评（工人评雇主 + 雇主评工人 + 评价列表 2 条 + 评自己/重复评价/未报名第三方/评分越界 4 个边界全拦截）→ 文件上传（成功 + 非法类型/空文件拦截 + 匿名访问图片）→ 文档（/doc.html /v3/api-docs /swagger-config 全 200）。修复 1 处缺陷：`LoginInterceptor` 未放行 `/uploads/**` 导致上传图片匿名访问 401，已补放行。**Phase 5 完成。**
+
 ### 🔄 进行中
-- 无（Phase 4 已全部完成，待合回 main）。
+- Phase 5 全部完成，待把 `feat/review-upload` 合回 `main` 并推远程、删本地分支。
 
 ### ⏭ 下一步
-- 合回 feat/social-feed → main（--no-ff）并 push、删分支。
-- Phase 5 互评+上传+收尾：互评、文件上传、Knife4j 文档。
+- 收尾：`git checkout main` → `git merge --no-ff feat/review-upload` → `git push` → 删本地分支 → 更新记忆 `linggong-project.md`。
+- 之后进入 Phase 6 前端（移动端 H5）。
 
 ---
 

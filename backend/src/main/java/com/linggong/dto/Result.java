@@ -1,5 +1,6 @@
 package com.linggong.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,6 +11,7 @@ import java.util.List;
  * 统一返回体
  */
 @Data
+@Schema(description = "统一返回体")
 @NoArgsConstructor
 @AllArgsConstructor
 public class Result {

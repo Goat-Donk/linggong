@@ -42,6 +42,27 @@ spring:
       simple:
         acknowledge-mode: manual
 
+  # ---------- 文件上传 ----------
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+# ---------- 接口文档（Knife4j / springdoc） ----------
+# 注意：不要关闭 springdoc.swagger-ui（enabled: false）。
+# knife4j 的 /doc.html 依赖 /v3/api-docs/swagger-config 发现分组，而该接口挂在 swagger-ui 配置下，
+# 关掉会导致 swagger-config 不支持 GET、文档页拿不到分组。
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+knife4j:
+  # 4.5.0 的“增强模式”会调用 springdoc 已变更的 getGroupConfigs()（List→Map），
+  # 与 Boot 3.5 + springdoc 2.8.x 冲突会报 NoSuchMethodError，故关闭增强、只保留 /doc.html 这个 UI。
+  enable: false
+  setting:
+    language: zh_cn           # 界面中文
+
 # ---------- MyBatis-Plus ----------
 mybatis-plus:
   configuration:
@@ -52,3 +73,8 @@ mybatis-plus:
 logging:
   level:
     com.linggong: debug
+
+# ---------- 自定义配置 ----------
+linggong:
+  upload:
+    dir: ${user.dir}/uploads/
