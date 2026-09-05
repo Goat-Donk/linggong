@@ -28,6 +28,9 @@ public final class RedisConstants {
     /** 互斥锁有效期（秒） */
     public static final Long LOCK_TTL = 10L;
 
+    /** 岗位 GEO key 前缀，完整 key = geo:job:{categoryId}，member = 岗位 id，坐标 = (x, y) */
+    public static final String GEO_JOB_KEY = "geo:job:";
+
     private RedisConstants() {
     }
 }

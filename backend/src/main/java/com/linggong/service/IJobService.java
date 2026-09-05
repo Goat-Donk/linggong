@@ -31,6 +31,13 @@ public interface IJobService extends IService<Job> {
     Result queryById(Long id);
 
     /**
+     * 附近岗位搜索（Redis GEO，按距离升序）。附近搜索无总数，前端按返回条数判断下一页。
+     *
+     * @param radius 搜索半径（米）
+     */
+    Result queryNearby(Long categoryId, Double x, Double y, Double radius, Integer page, Integer pageSize);
+
+    /**
      * 按分类分页查询上架岗位（按创建时间倒序）。
      */
     Result queryByCategory(Long categoryId, Integer page, Integer pageSize);

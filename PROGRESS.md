@@ -220,12 +220,13 @@ d:\linggong\
 - Phase 2 第 2 步：岗位 CRUD + 分类列表 —— `IJobCategoryService`/`IJobService` 及实现、`JobController`/`JobCategoryController`、`JobDTO`/`JobFormDTO`、`MybatisConfig`（分页插件）、`UserDTO` 加 role 字段。发布仅限雇主（role=1）+ 岗位归属校验 + 起止时间校验，`mvn compile` 通过。
 - Phase 2 第 3 步：岗位详情缓存（穿透 + 击穿）—— 新增 `CacheClient`（set 随机 TTL 防雪崩 / queryWithPassThrough 空对象防穿透 / queryWithMutex 互斥锁防击穿 / delete 缓存失效）、`RedisConstants` 加 cache:job: 与 lock: 常量，`queryById` 改走缓存。自审修复：改/下架岗位后删缓存（缓存一致性）+ 修正黑马点评互斥锁误删锁的瑕疵。`mvn compile` 通过。
 - Phase 2 第 4 步：缓存击穿进阶（逻辑过期）+ 布隆过滤器 —— `RedisData` 逻辑过期包装、`CacheClient` 加 setWithLogicalExpire/queryWithLogicalExpire（异步重建线程池）、`RedissonConfig`（RedissonClient）、`JobBloomFilter`（启动预载岗位 id，初始化失败降级）、`queryById` 改走布隆预判 + 逻辑过期查询（未预热兜底）、publish 新岗位入布隆。`mvn compile` 通过。
+- Phase 2 第 5 步：附近搜索（Redis GEO）—— `RedisConstants` 加 geo:job: 常量、`IJobService.queryNearby`、`JobController /job/nearby`、`JobServiceImpl` 注入 StringRedisTemplate：发布写 GEO / 编辑先删旧分类再加新分类 / 下架移除 GEO、`queryNearby` 用 GEOSEARCH + WITHDIST 按距离升序分页。`mvn compile` 通过。
 
 ### 🔄 进行中
-- Phase 2 岗位+缓存 —— 第 4 步（逻辑过期 + 布隆过滤器）已完成，进行第 5 步。
+- Phase 2 岗位+缓存 —— 第 5 步（附近搜索 GEO）已完成，进行第 6 步。
 
 ### ⏭ 下一步
-- Phase 2 第 5 步：附近搜索（Redis GEO）—— 发布岗位时写 GEO（geo:job:{categoryId}），`GEOSEARCH` 按距离查附近岗位，返回带 distance 的 JobDTO。
+- Phase 2 第 6 步：启动验证 —— 拉起 MySQL/Redis/RabbitMQ 容器 → 启动应用 → curl 端到端测岗位全链路（发布 → 详情缓存 → 附近搜索 → 分类分页 → 搜索 → 下架）。
 
 ---
 

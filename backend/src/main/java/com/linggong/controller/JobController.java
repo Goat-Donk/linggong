@@ -59,6 +59,19 @@ public class JobController {
     }
 
     /**
+     * 附近岗位搜索（按距离升序，半径单位米）。
+     */
+    @GetMapping("/nearby")
+    public Result queryNearby(@RequestParam("categoryId") Long categoryId,
+                              @RequestParam("x") Double x,
+                              @RequestParam("y") Double y,
+                              @RequestParam(value = "radius", defaultValue = "5000") Double radius,
+                              @RequestParam(value = "page", defaultValue = "1") Integer page,
+                              @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        return jobService.queryNearby(categoryId, x, y, radius, page, pageSize);
+    }
+
+    /**
      * 按分类分页查询上架岗位。
      */
     @GetMapping("/category/{categoryId}")
