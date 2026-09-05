@@ -166,7 +166,7 @@ d:\linggong\
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
-| **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
+| **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | 🔄 进行中 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
 | **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
 
@@ -228,12 +228,13 @@ d:\linggong\
 - Phase 3 第 4 步：报名查询 + 雇主审核 —— `JobApplicationDTO`（报名字段 + 岗位简要信息）、`myApplications`（我的报名分页，批量查岗位避免 N+1）、`audit`（雇主审核：归属校验 + 状态机 0→1通过/0→3拒绝 + 防重复审核）、`JobApplicationController` 加 GET /my、PUT /{id}/approve、PUT /{id}/reject。`mvn compile` 通过。
 - Phase 3 第 5 步：启动验证通过 —— 端到端 11 项全通过：发布岗位预热名额（apply:stock 正确）→ 工人报名 Lua 秒杀（名额扣减 + 一人一单标记）→ MQ 异步落单（tb_job_application 写入 + DB headcount 扣减）→ 我的报名（含岗位信息）→ 重复报名拦截 → 报名自己岗位拦截 → 雇主审核通过（0→1）→ 重复审核拦截 → 名额满拦截 → 拒绝审核（0→3）→ 越权审核拦截。**Phase 3 完成。**
 
+- Phase 4 第 1 步：关注功能 —— `Follow` 实体 + `FollowMapper`、`IFollowService`/`FollowServiceImpl`（关注/取关 DB+Redis 双写、是否已关注、共同关注 SINTER 交集）、`FollowController`（PUT /follow/{id}/{isFollow}、GET /follow/or/not/{id}、GET /follow/common/{id}）、`RedisConstants` 加 follows: 前缀。`mvn compile` 通过。
+
 ### 🔄 进行中
-- 无（Phase 3 已全部完成，待合并分支后进入 Phase 4）。
+- Phase 4 社交+Feed+签到 —— 第 1 步已完成，进行第 2 步。
 
 ### ⏭ 下一步
-- Phase 3 收尾：提交 feat/apply-mq → 合回 main（--no-ff）→ push → 删分支。
-- Phase 4 社交+Feed+签到：关注/取关、晒单动态、点赞、推流 Feed、滚动分页、每日签到（Bitmap）。
+- Phase 4 第 2 步：晒单动态 —— Blog 实体 + Mapper、发布动态、我的动态、点赞（Redis Set 记录点赞用户 + 点赞数）。
 
 ---
 
