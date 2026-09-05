@@ -165,7 +165,7 @@ d:\linggong\
 | **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ✅ 完成 |
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
-| **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | 🔄 进行中 |
+| **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
 | **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
@@ -226,12 +226,14 @@ d:\linggong\
 - Phase 3 第 2 步：RabbitMQ 组件 + 秒杀 Lua —— `MqConstants`（交换机/队列/路由 key 常量）、`RabbitConfig`（交换机 job.direct + 主队列 job.application 带死信 + 死信队列 job.application.dlq + 绑定）、`RedisScriptConfig`（静态加载 seckill.lua 为 Bean）、`resources/lua/seckill.lua`（原子：查名额 → 一人一单 → 扣名额 → 记标记，返回 0/1/2）、`RedisConstants` 加 apply:stock: / apply:order: / apply id 前缀。`mvn compile` 通过。
 - Phase 3 第 3 步：报名核心 Service + Controller —— `ApplyMessage`（MQ 消息体 jobId/workerId/orderId）、`IJobApplicationService`/`JobApplicationServiceImpl`（报名：岗位校验 → 名额懒加载预热 → Lua 原子扣名额 → 生成雪花单号 → 发 MQ）、`JobApplicationController`（POST /job-application/{jobId}）、`JobApplicationConsumer`（@RabbitListener 监听主队列，幂等落单 + 扣 DB 名额 + 手动 ACK，失败 basicNack 进死信）、`JobMapper.deductHeadcount`（headcount-1 且 >0 防负数）、`JobServiceImpl.publish` 发布岗位预热名额、`application.yml` 配 manual ack。`mvn compile` 通过。
 - Phase 3 第 4 步：报名查询 + 雇主审核 —— `JobApplicationDTO`（报名字段 + 岗位简要信息）、`myApplications`（我的报名分页，批量查岗位避免 N+1）、`audit`（雇主审核：归属校验 + 状态机 0→1通过/0→3拒绝 + 防重复审核）、`JobApplicationController` 加 GET /my、PUT /{id}/approve、PUT /{id}/reject。`mvn compile` 通过。
+- Phase 3 第 5 步：启动验证通过 —— 端到端 11 项全通过：发布岗位预热名额（apply:stock 正确）→ 工人报名 Lua 秒杀（名额扣减 + 一人一单标记）→ MQ 异步落单（tb_job_application 写入 + DB headcount 扣减）→ 我的报名（含岗位信息）→ 重复报名拦截 → 报名自己岗位拦截 → 雇主审核通过（0→1）→ 重复审核拦截 → 名额满拦截 → 拒绝审核（0→3）→ 越权审核拦截。**Phase 3 完成。**
 
 ### 🔄 进行中
-- Phase 3 报名+秒杀+MQ —— 第 4 步已完成，进行第 5 步（启动验证）。
+- 无（Phase 3 已全部完成，待合并分支后进入 Phase 4）。
 
 ### ⏭ 下一步
-- Phase 3 第 5 步：启动验证 —— 启动应用，端到端测报名全链路（发布岗位预热名额 → 报名走 Lua 秒杀 → MQ 异步落单 → 我的报名 → 雇主审核通过/拒绝 → 名额满 / 重复报名拦截）。
+- Phase 3 收尾：提交 feat/apply-mq → 合回 main（--no-ff）→ push → 删分支。
+- Phase 4 社交+Feed+签到：关注/取关、晒单动态、点赞、推流 Feed、滚动分页、每日签到（Bitmap）。
 
 ---
 
