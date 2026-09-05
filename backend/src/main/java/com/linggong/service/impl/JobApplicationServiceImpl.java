@@ -1,0 +1,172 @@
+package com.linggong.service.impl;
+
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.linggong.dto.ApplyMessage;
+import com.linggong.dto.JobApplicationDTO;
+import com.linggong.dto.Result;
+import com.linggong.entity.Job;
+import com.linggong.entity.JobApplication;
+import com.linggong.mapper.JobApplicationMapper;
+import com.linggong.mapper.JobMapper;
+import com.linggong.service.IJobApplicationService;
+import com.linggong.utils.MqConstants;
+import com.linggong.utils.RedisConstants;
+import com.linggong.utils.RedisIdWorker;
+import com.linggong.utils.UserHolder;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * 报名服务实现。
+ *
+ * <p>报名流程（对齐黑马点评秒杀，Redis Stream 换成 RabbitMQ）：
+ * <ol>
+ *   <li>校验：岗位存在且上架、非本人发布；</li>
+ *   <li>名额预热：Redis 无名额缓存时从 DB 懒加载（覆盖历史岗位）；</li>
+ *   <li>Lua 原子：查名额 → 一人一单 → 扣名额 → 记标记；</li>
+ *   <li>成功则生成雪花单号，发消息到 RabbitMQ，由消费者异步落单。</li>
+ * </ol>
+ *
+ * <p>报名状态机：0 待确认 →（雇主审核）1 已录用 / 3 已取消 → 2 已完成。
+ */
+@Service
+public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper, JobApplication>
+        implements IJobApplicationService {
+
+    private final JobMapper jobMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final RedisIdWorker redisIdWorker;
+    private final RabbitTemplate rabbitTemplate;
+    private final DefaultRedisScript<Long> seckillScript;
+
+    public JobApplicationServiceImpl(JobMapper jobMapper, StringRedisTemplate stringRedisTemplate,
+                                     RedisIdWorker redisIdWorker, RabbitTemplate rabbitTemplate,
+                                     DefaultRedisScript<Long> seckillScript) {
+        this.jobMapper = jobMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.redisIdWorker = redisIdWorker;
+        this.rabbitTemplate = rabbitTemplate;
+        this.seckillScript = seckillScript;
+    }
+
+    @Override
+    public Result apply(Long jobId) {
+        Long workerId = UserHolder.getUser().getId();
+
+        // 1. 岗位校验：存在 + 上架 + 非本人发布
+        Job job = jobMapper.selectById(jobId);
+        if (job == null) {
+            return Result.fail("岗位不存在");
+        }
+        if (job.getStatus() == null || job.getStatus() != 0) {
+            return Result.fail("岗位已下架，无法报名");
+        }
+        if (job.getEmployerId().equals(workerId)) {
+            return Result.fail("不能报名自己发布的岗位");
+        }
+
+        // 2. 名额预热：Redis 无缓存时从 DB 懒加载（覆盖 Phase 2 已发布的老岗位）
+        ensureApplyStock(job);
+
+        // 3. 执行 Lua 秒杀（原子：扣名额 + 一人一单）
+        Long result = stringRedisTemplate.execute(
+                seckillScript,
+                Collections.emptyList(),
+                String.valueOf(jobId),
+                String.valueOf(workerId));
+        if (result == null) {
+            return Result.fail("系统繁忙，请稍后再试");
+        }
+        if (result == 1) {
+            return Result.fail("岗位名额已满");
+        }
+        if (result == 2) {
+            return Result.fail("请勿重复报名");
+        }
+
+        // 4. 生成报名单号 + 发消息到 RabbitMQ（异步落单）
+        long orderId = redisIdWorker.nextId(RedisConstants.APPLY_ID_PREFIX);
+        ApplyMessage message = new ApplyMessage(jobId, workerId, orderId);
+        rabbitTemplate.convertAndSend(
+                MqConstants.JOB_EXCHANGE,
+                MqConstants.JOB_APPLICATION_KEY,
+                JSONUtil.toJsonStr(message));
+
+        return Result.ok(orderId);
+    }
+
+    @Override
+    public Result myApplications(Integer page, Integer pageSize) {
+        Long workerId = UserHolder.getUser().getId();
+        // 1. 分页查我的报名记录
+        Page<JobApplication> pageResult = lambdaQuery()
+                .eq(JobApplication::getWorkerId, workerId)
+                .orderByDesc(JobApplication::getCreateTime)
+                .page(new Page<>(page, pageSize));
+
+        // 2. 批量查岗位，拼岗位简要信息
+        List<Long> jobIds = pageResult.getRecords().stream()
+                .map(JobApplication::getJobId)
+                .collect(Collectors.toList());
+        Map<Long, Job> jobMap = jobIds.isEmpty() ? Collections.emptyMap()
+                : jobMapper.selectBatchIds(jobIds).stream()
+                        .collect(Collectors.toMap(Job::getId, job -> job));
+
+        // 3. 组装 DTO
+        List<JobApplicationDTO> dtos = pageResult.getRecords().stream().map(app -> {
+            JobApplicationDTO dto = BeanUtil.copyProperties(app, JobApplicationDTO.class);
+            Job job = jobMap.get(app.getJobId());
+            if (job != null) {
+                dto.setJobName(job.getName());
+                dto.setAddress(job.getAddress());
+                dto.setSalary(job.getSalary());
+            }
+            return dto;
+        }).collect(Collectors.toList());
+
+        return Result.ok(dtos, pageResult.getTotal());
+    }
+
+    @Override
+    public Result audit(Long applicationId, boolean approve) {
+        Long employerId = UserHolder.getUser().getId();
+        // 1. 报名记录存在且处于「待确认」状态
+        JobApplication application = getById(applicationId);
+        if (application == null) {
+            return Result.fail("报名记录不存在");
+        }
+        if (application.getStatus() == null || application.getStatus() != 0) {
+            return Result.fail("该报名已处理，不能重复审核");
+        }
+        // 2. 归属校验：只能审核自己发布岗位下的报名
+        Job job = jobMapper.selectById(application.getJobId());
+        if (job == null || !job.getEmployerId().equals(employerId)) {
+            return Result.fail("只能审核自己发布岗位的报名");
+        }
+        // 3. 状态流转：通过 → 已录用(1)，拒绝 → 已取消(3)
+        application.setStatus(approve ? 1 : 3);
+        updateById(application);
+        return Result.ok();
+    }
+
+    /**
+     * 报名名额懒加载：Redis 中无该岗位名额时，从 DB 读取 headcount 预热。
+     * 用 setIfAbsent 保证并发下只有一个请求真正写入，其余请求复用已有值。
+     */
+    private void ensureApplyStock(Job job) {
+        String stockKey = RedisConstants.APPLY_STOCK_KEY + job.getId();
+        if (Boolean.FALSE.equals(stringRedisTemplate.hasKey(stockKey))) {
+            stringRedisTemplate.opsForValue().setIfAbsent(stockKey, String.valueOf(job.getHeadcount()));
+        }
+    }
+}

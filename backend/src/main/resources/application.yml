@@ -37,7 +37,10 @@ spring:
     port: 5672
     username: guest
     password: guest
-    # 注意：listener 手动 ACK / 发布确认等进阶配置，放到 Phase 3 秒杀时再加
+    # 手动 ACK：报名消费者落单成功后手动确认，失败 basicNack 进死信队列
+    listener:
+      simple:
+        acknowledge-mode: manual
 
 # ---------- MyBatis-Plus ----------
 mybatis-plus:
