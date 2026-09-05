@@ -24,4 +24,9 @@ public interface IUserService extends IService<User> {
      * 退出登录（删除 Redis 中的 token）。
      */
     Result logout(String token);
+
+    /**
+     * 刷新 Redis 中 token 对应的用户缓存（修改资料后调用，避免 /user/me 返回旧昵称）。
+     */
+    void refreshUserCache(String token, Long userId);
 }

@@ -13,6 +13,7 @@ import com.linggong.mapper.UserMapper;
 import com.linggong.service.IUserService;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RegexUtils;
+import com.linggong.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -91,6 +92,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 删除 Redis 中的 token；ThreadLocal 的清理由拦截器 afterCompletion 统一负责
         stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + token);
         return Result.ok();
+    }
+
+    @Override
+    public void refreshUserCache(String token, Long userId) {
+        if (token == null || token.isBlank() || userId == null) {
+            return;
+        }
+        // 重新查库拿最新昵称/头像，回写 Redis 的 token 缓存 + ThreadLocal
+        User user = getById(userId);
+        if (user == null) {
+            return;
+        }
+        UserDTO fresh = BeanUtil.copyProperties(user, UserDTO.class);
+        stringRedisTemplate.opsForValue().set(
+                RedisConstants.LOGIN_USER_KEY + token,
+                JSONUtil.toJsonStr(fresh),
+                RedisConstants.LOGIN_USER_TTL,
+                TimeUnit.MINUTES
+        );
+        UserHolder.saveUser(fresh);
     }
 
     /**

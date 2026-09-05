@@ -163,7 +163,7 @@ d:\linggong\
 | 阶段 | 内容 | 对应技术点 | 状态 |
 |---|---|---|---|
 | **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ✅ 完成 |
-| **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | 🔄 进行中 |
+| **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ⬜ 未开始 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ⬜ 未开始 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
@@ -209,13 +209,15 @@ d:\linggong\
 - Phase 1 第 2 步：通用工具 —— `RedisConstants`（login:code / login:token 前缀 + TTL）、`UserHolder`（ThreadLocal）、`RegexUtils`（手机号校验），`mvn compile` 通过。登录存 token 用 `StringRedisTemplate` + hutool `JSONUtil`，自定义 `RedisTemplate` 留到 Phase 2 缓存再加。
 - Phase 1 第 3 步：Service 层 —— `IUserService`/`UserServiceImpl`（发验证码 + 登录 + 退出，首次登录自动注册）、`IUserInfoService`/`UserInfoServiceImpl`（`getByUserId` 按 user_id 查、`saveOrUpdateByUserId` 保存/更新），`mvn compile` 通过。
 - Phase 1 第 4 步：Controller + 双拦截器 —— `UserController`（`/user/code`、`/user/login`、`/user/me`、`/user/logout`、`/user/{id}`、`/user/info/{id}`、`/user/update`）、`RefreshTokenInterceptor`（解析 token + 刷新有效期）、`LoginInterceptor`（未登录返回 401）、`MvcConfig`（注册 + 排除登录路径）、`UserUpdateDTO`，`mvn compile` 通过。
-- 环境：编译时再次触发内存不足（WSL2/Docker 吃满 4GB 导致 `fork` 失败），已 `wsl --shutdown` 释放内存后编译通过。**注意**：WSL 关闭后 Docker Desktop 后端已停，MySQL/Redis/RabbitMQ 容器需在 Phase 1 第 5 步启动验证前重新拉起。
+- Phase 1 第 5 步：启动验证通过 —— curl 端到端测完整链路（发码 → 登录拿 token → /user/me → 改资料 → 看资料 → 退出 → 无 token 返回 401）全部成功。
+- Phase 1 收尾修复：① 发现并修复「改资料后 /user/me 返回旧昵称」—— 新增 `UserService.refreshUserCache()`，改资料后回写 Redis token 缓存 + ThreadLocal；② 环境冲突：本机原生 MySQL（服务「MySQL」）占 3306，Docker MySQL 改映射到 **3307**（docker-compose + application.yml 已同步改）。
+- 环境排查（重要）：本机 16GB 内存未满（空闲 ~7GB），OOM 根因是**页面文件被固定成 2915MB×2（非系统托管）**，导致提交内存上限仅 ~18.6GB，Docker+VSCode+应用一起跑就触顶崩溃。已把 WSL2 内存 4GB→3GB；**建议用户把虚拟内存改为「系统托管」**（需重启）。
 
 ### 🔄 进行中
-- Phase 1 登录 —— 第 4 步（Controller + 双拦截器）已完成，进行第 5 步。
+- （无，Phase 1 登录已全部完成）
 
 ### ⏭ 下一步
-- Phase 1 第 5 步：启动验证 —— 重新拉起 MySQL/Redis/RabbitMQ 容器 → 启动应用 → curl 端到端测登录（发码 → 登录拿 token → /user/me → 改资料 → 退出）。
+- Phase 2 岗位+缓存：岗位 CRUD、分类列表、附近搜索（Redis GEO）、岗位详情缓存（缓存三问题 + 布隆过滤器 + CacheClient）。
 
 ---
 

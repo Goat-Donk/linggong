@@ -97,7 +97,8 @@ public class UserController {
      * 信用分 credit 不在此处修改，由互评阶段系统维护。
      */
     @PutMapping("/update")
-    public Result update(@Valid @RequestBody UserUpdateDTO updateDTO) {
+    public Result update(@RequestHeader(value = "authorization", required = false) String token,
+                         @Valid @RequestBody UserUpdateDTO updateDTO) {
         Long userId = UserHolder.getUser().getId();
 
         // 1. 更新用户表（昵称/头像）
@@ -114,6 +115,9 @@ public class UserController {
         userInfo.setAge(updateDTO.getAge());
         userInfo.setGender(updateDTO.getGender());
         userInfoService.saveOrUpdateByUserId(userInfo);
+
+        // 3. 刷新 token 缓存的用户信息，避免 /user/me 返回旧昵称
+        userService.refreshUserCache(token, userId);
 
         return Result.ok();
     }

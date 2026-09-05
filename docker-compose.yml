@@ -25,7 +25,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
     ports:
-      - "3306:3306"
+      - "3307:3306"   # 宿主 3307 → 容器 3306（本机原生 MySQL 已占 3306，故映射到 3307）
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
