@@ -2,6 +2,9 @@ package com.linggong.controller;
 
 import com.linggong.dto.Result;
 import com.linggong.service.IJobApplicationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 报名接口：报名岗位（限量秒杀）、我的报名记录、雇主审核。
  */
+@Tag(name = "报名接口", description = "报名岗位（限量秒杀）、我的报名记录、雇主审核")
 @RestController
 @RequestMapping("/job-application")
 public class JobApplicationController {
@@ -29,33 +33,37 @@ public class JobApplicationController {
      * @param jobId 岗位 id
      * @return 报名结果，成功时 data 为报名单号
      */
+    @Operation(summary = "报名岗位（Lua 秒杀 + MQ 异步落单）")
     @PostMapping("/{jobId}")
-    public Result apply(@PathVariable("jobId") Long jobId) {
+    public Result apply(@Parameter(description = "岗位 id") @PathVariable("jobId") Long jobId) {
         return jobApplicationService.apply(jobId);
     }
 
     /**
      * 我的报名记录（分页）。
      */
+    @Operation(summary = "我的报名记录（分页）")
     @GetMapping("/my")
-    public Result myApplications(@RequestParam(value = "page", defaultValue = "1") Integer page,
-                                 @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+    public Result myApplications(@Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
+                                 @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return jobApplicationService.myApplications(page, pageSize);
     }
 
     /**
      * 雇主通过报名（0 待确认 → 1 已录用）。
      */
+    @Operation(summary = "雇主通过报名（0 待确认 → 1 已录用）")
     @PutMapping("/{id}/approve")
-    public Result approve(@PathVariable("id") Long id) {
+    public Result approve(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
         return jobApplicationService.audit(id, true);
     }
 
     /**
      * 雇主拒绝报名（0 待确认 → 3 已取消）。
      */
+    @Operation(summary = "雇主拒绝报名（0 待确认 → 3 已取消）")
     @PutMapping("/{id}/reject")
-    public Result reject(@PathVariable("id") Long id) {
+    public Result reject(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
         return jobApplicationService.audit(id, false);
     }
 }

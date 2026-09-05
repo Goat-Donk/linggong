@@ -3,6 +3,9 @@ package com.linggong.controller;
 import com.linggong.dto.EvaluationFormDTO;
 import com.linggong.dto.Result;
 import com.linggong.service.IJobEvaluationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 互评接口：发布互评、查看岗位评价列表。
  */
+@Tag(name = "互评接口", description = "发布互评、查看岗位评价列表")
 @RestController
 @RequestMapping("/evaluation")
 public class EvaluationController {
@@ -28,6 +32,7 @@ public class EvaluationController {
     /**
      * 发布互评（雇主评工人 / 工人评雇主）。
      */
+    @Operation(summary = "发布互评（雇主评工人 / 工人评雇主）")
     @PostMapping
     public Result publish(@Valid @RequestBody EvaluationFormDTO form) {
         return evaluationService.publish(form);
@@ -36,10 +41,11 @@ public class EvaluationController {
     /**
      * 查看岗位下的评价列表（分页）。
      */
+    @Operation(summary = "查看岗位下的评价列表（分页）")
     @GetMapping("/job/{jobId}")
-    public Result queryByJob(@PathVariable("jobId") Long jobId,
-                             @RequestParam(value = "page", defaultValue = "1") Integer page,
-                             @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+    public Result queryByJob(@Parameter(description = "岗位 id") @PathVariable("jobId") Long jobId,
+                             @Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
+                             @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return evaluationService.queryByJob(jobId, page, pageSize);
     }
 }

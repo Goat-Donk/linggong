@@ -35,7 +35,8 @@ public class MvcConfig implements WebMvcConfigurer {
         // 1. 刷新 token 拦截器：放行所有请求
         registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).order(0);
 
-        // 2. 登录校验拦截器：排除无需登录的路径（发验证码、登录）
+        // 2. 登录校验拦截器：排除无需登录的写接口（发验证码、登录）
+        //    接口文档等浏览类 GET 的放行在 LoginInterceptor 内用前缀判断处理。
         registry.addInterceptor(new LoginInterceptor())
                 .excludePathPatterns(
                         "/user/code",

@@ -12,10 +12,18 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 岗位/分类的浏览类 GET 接口放行：未登录也能浏览岗位（对齐黑马点评开放 /shop/** 查询）
+        // 浏览类 GET 接口放行：未登录也能浏览岗位（对齐黑马点评开放 /shop/** 查询）
+        // 以及接口文档（页面 /doc.html、静态资源 /webjars、OpenAPI JSON /v3/api-docs）。
         // 写操作（POST/PUT/DELETE）不在此列，仍需登录校验
         String uri = request.getRequestURI();
-        if ("GET".equalsIgnoreCase(request.getMethod()) && uri.startsWith("/job")) {
+        if ("GET".equalsIgnoreCase(request.getMethod())
+                && (uri.startsWith("/job")
+                    || uri.startsWith("/doc.html")
+                    || uri.startsWith("/v3/api-docs")
+                    || uri.startsWith("/webjars")
+                    || uri.startsWith("/swagger-ui")
+                    // /error 是 Spring 异常处理的内部转发，放行以保留真实错误码（否则会误报 401）
+                    || uri.startsWith("/error"))) {
             return true;
         }
         if (UserHolder.getUser() == null) {

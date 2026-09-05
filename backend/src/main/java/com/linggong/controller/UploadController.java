@@ -1,6 +1,9 @@
 package com.linggong.controller;
 
 import com.linggong.dto.Result;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +22,7 @@ import java.util.UUID;
  * <p>上传成功后返回可访问的 URL（/uploads/{文件名}），
  * 由 {@code MvcConfig.addResourceHandlers} 把 /uploads/** 映射到本地目录。
  */
+@Tag(name = "文件上传接口", description = "上传图片（本地存储）")
 @RestController
 @RequestMapping("/upload")
 public class UploadController {
@@ -33,8 +37,9 @@ public class UploadController {
     /**
      * 上传图片，返回可访问 URL。
      */
+    @Operation(summary = "上传图片，返回可访问 URL")
     @PostMapping("/image")
-    public Result uploadImage(@RequestParam("file") MultipartFile file) {
+    public Result uploadImage(@Parameter(description = "图片文件（jpg/jpeg/png/gif/webp）") @RequestParam("file") MultipartFile file) {
         // 1. 非空校验
         if (file == null || file.isEmpty()) {
             return Result.fail("文件不能为空");

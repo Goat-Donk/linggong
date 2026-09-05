@@ -1,5 +1,6 @@
 package com.linggong.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -8,6 +9,7 @@ import java.time.LocalDateTime;
  * 互评展示对象：评价字段 + 评价人/被评价人简要信息。
  */
 @Data
+@Schema(description = "互评展示对象")
 public class EvaluationDTO {
 
     private Long id;

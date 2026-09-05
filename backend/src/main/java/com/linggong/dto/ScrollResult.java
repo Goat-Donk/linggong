@@ -1,5 +1,6 @@
 package com.linggong.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.List;
  * 之所以要 offset，是因为同一个时间戳可能对应多条动态，仅靠 minTime 定位会漏数据。
  */
 @Data
+@Schema(description = "滚动分页结果（Feed 关注流）")
 public class ScrollResult {
 
     /** 本次返回的动态列表 */

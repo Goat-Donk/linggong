@@ -10,6 +10,9 @@ import com.linggong.entity.UserInfo;
 import com.linggong.service.IUserInfoService;
 import com.linggong.service.IUserService;
 import com.linggong.utils.UserHolder;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 用户接口：登录认证 + 个人资料。
  */
+@Tag(name = "用户接口", description = "登录认证 + 个人资料 + 每日签到")
 @RestController
 @RequestMapping("/user")
 public class UserController {
@@ -39,14 +43,16 @@ public class UserController {
     /**
      * 发送登录验证码（模拟短信，验证码存 Redis，2 分钟有效）。
      */
+    @Operation(summary = "发送登录验证码（存 Redis，2 分钟有效）")
     @PostMapping("/code")
-    public Result sendCode(@RequestParam("phone") String phone) {
+    public Result sendCode(@Parameter(description = "手机号") @RequestParam("phone") String phone) {
         return userService.sendCode(phone);
     }
 
     /**
      * 手机号 + 验证码登录，成功返回 token。
      */
+    @Operation(summary = "手机号 + 验证码登录，成功返回 token")
     @PostMapping("/login")
     public Result login(@Valid @RequestBody LoginFormDTO loginForm) {
         return userService.login(loginForm);
@@ -55,6 +61,7 @@ public class UserController {
     /**
      * 获取当前登录用户（从 ThreadLocal 取，不查库）。
      */
+    @Operation(summary = "获取当前登录用户（从 ThreadLocal 取，不查库）")
     @GetMapping("/me")
     public Result me() {
         return Result.ok(UserHolder.getUser());
@@ -63,6 +70,7 @@ public class UserController {
     /**
      * 退出登录（删除 Redis 中的 token）。
      */
+    @Operation(summary = "退出登录（删除 Redis 中的 token）")
     @PostMapping("/logout")
     public Result logout(@RequestHeader(value = "authorization", required = false) String token) {
         return userService.logout(token);
@@ -71,6 +79,7 @@ public class UserController {
     /**
      * 每日签到（Bitmap）。
      */
+    @Operation(summary = "每日签到（Bitmap，幂等）")
     @PostMapping("/sign")
     public Result sign() {
         return userService.sign();
@@ -79,6 +88,7 @@ public class UserController {
     /**
      * 本月连续签到天数。
      */
+    @Operation(summary = "本月连续签到天数")
     @GetMapping("/sign/count")
     public Result signCount() {
         return userService.signCount();
@@ -87,8 +97,9 @@ public class UserController {
     /**
      * 查看他人主页（昵称 + 头像）。
      */
+    @Operation(summary = "查看他人主页（昵称 + 头像）")
     @GetMapping("/{id}")
-    public Result queryUserById(@PathVariable("id") Long userId) {
+    public Result queryUserById(@Parameter(description = "用户 id") @PathVariable("id") Long userId) {
         User user = userService.getById(userId);
         if (user == null) {
             return Result.fail("用户不存在");
@@ -99,8 +110,9 @@ public class UserController {
     /**
      * 查看他人资料（简介/年龄/性别/信用分）。
      */
+    @Operation(summary = "查看他人资料（简介/年龄/性别/信用分）")
     @GetMapping("/info/{id}")
-    public Result queryUserInfo(@PathVariable("id") Long userId) {
+    public Result queryUserInfo(@Parameter(description = "用户 id") @PathVariable("id") Long userId) {
         UserInfo info = userInfoService.getByUserId(userId);
         // 没填过资料时返回空，前端展示"暂无资料"
         return Result.ok(info);
@@ -112,6 +124,7 @@ public class UserController {
      * <p>跨两张表（tb_user / tb_user_info），这里做简单编排；
      * 信用分 credit 不在此处修改，由互评阶段系统维护。
      */
+    @Operation(summary = "修改个人资料（昵称/头像 + 简介/年龄/性别）")
     @PutMapping("/update")
     public Result update(@RequestHeader(value = "authorization", required = false) String token,
                          @Valid @RequestBody UserUpdateDTO updateDTO) {

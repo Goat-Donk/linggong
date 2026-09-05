@@ -3,12 +3,14 @@ package com.linggong.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
  * 用户资料实体，对应表 tb_user_info，与 tb_user 一对一（user_id 唯一）。
  */
 @Data
+@Schema(description = "用户资料")
 @TableName("tb_user_info")
 public class UserInfo {
 

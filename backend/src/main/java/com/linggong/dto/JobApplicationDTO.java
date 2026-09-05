@@ -1,5 +1,6 @@
 package com.linggong.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -8,6 +9,7 @@ import java.time.LocalDateTime;
  * 报名记录展示对象：报名核心字段 + 岗位简要信息（供「我的报名」列表展示）。
  */
 @Data
+@Schema(description = "报名记录展示对象")
 public class JobApplicationDTO {
 
     /** 报名单号 */

@@ -3,6 +3,7 @@ package com.linggong.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
+@Schema(description = "零工岗位")
 @TableName("tb_job")
 public class Job {
 
