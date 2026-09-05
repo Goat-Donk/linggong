@@ -223,12 +223,13 @@ d:\linggong\
 - Phase 2 第 5 步：附近搜索（Redis GEO）—— `RedisConstants` 加 geo:job: 常量、`IJobService.queryNearby`、`JobController /job/nearby`、`JobServiceImpl` 注入 StringRedisTemplate：发布写 GEO / 编辑先删旧分类再加新分类 / 下架移除 GEO、`queryNearby` 用 GEOSEARCH + WITHDIST 按距离升序分页。`mvn compile` 通过。
 - Phase 2 第 6 步：启动验证通过 —— 端到端 curl 测岗位全链路全部成功：① 岗位详情（未登录放行）② 附近搜索（按距离升序、distance 正确）③ 分类分页（total 正确）④ 关键词搜索 ⑤ 下架（成功）⑥ 下架后 GEO 移除（附近搜索不再返回该岗位）⑦ 下架后详情 status=1（缓存已删）⑧ role=0 用户发布被拒（"只有雇主才能发布岗位"）。修复：`LoginInterceptor` 放行 GET /job 浏览类接口（未登录也能逛岗位，写操作仍需登录）。**Phase 2 完成。**
 - Phase 3 第 1 步：报名实体 + Mapper + 分布式 ID —— `JobApplication` 实体（id 雪花算法 INPUT，status 0待确认/1已录用/2已完成/3已取消）、`JobApplicationMapper`（空 BaseMapper）、`RedisIdWorker`（雪花算法简化版：1符号位+31时间戳+32序列号，序列号用 Redis INCR 按天自增）。`mvn compile` 通过。
+- Phase 3 第 2 步：RabbitMQ 组件 + 秒杀 Lua —— `MqConstants`（交换机/队列/路由 key 常量）、`RabbitConfig`（交换机 job.direct + 主队列 job.application 带死信 + 死信队列 job.application.dlq + 绑定）、`RedisScriptConfig`（静态加载 seckill.lua 为 Bean）、`resources/lua/seckill.lua`（原子：查名额 → 一人一单 → 扣名额 → 记标记，返回 0/1/2）、`RedisConstants` 加 apply:stock: / apply:order: / apply id 前缀。`mvn compile` 通过。
 
 ### 🔄 进行中
-- Phase 3 报名+秒杀+MQ —— 第 1 步已完成，进行第 2 步。
+- Phase 3 报名+秒杀+MQ —— 第 2 步已完成，进行第 3 步。
 
 ### ⏭ 下一步
-- Phase 3 第 2 步：RabbitMQ 组件配置（交换机 job.direct / 队列 job.application + 死信 job.application.dlq）+ 秒杀 Lua 脚本（查名额 → 一人一单 → 扣名额 → 记标记）。
+- Phase 3 第 3 步：报名核心 Service + Controller —— 报名接口走 Lua 原子扣名额 + 发 MQ、MQ 消费者幂等落单（写 tb_job_application + 扣 DB headcount）、名额预热、防重复报名。
 
 ---
 

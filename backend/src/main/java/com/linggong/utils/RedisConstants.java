@@ -31,6 +31,13 @@ public final class RedisConstants {
     /** 岗位 GEO key 前缀，完整 key = geo:job:{categoryId}，member = 岗位 id，坐标 = (x, y) */
     public static final String GEO_JOB_KEY = "geo:job:";
 
+    /** 报名剩余名额 key 前缀，完整 key = apply:stock:{jobId}，value 为剩余名额数字（发布岗位时预热） */
+    public static final String APPLY_STOCK_KEY = "apply:stock:";
+    /** 报名一人一单标记 key 前缀，完整 key = apply:order:{jobId}（Set，存已报名 workerId） */
+    public static final String APPLY_ORDER_KEY = "apply:order:";
+    /** 报名记录 id 的 RedisIdWorker 前缀，完整 key = icr:apply:{yyyy:MM:dd} */
+    public static final String APPLY_ID_PREFIX = "apply";
+
     private RedisConstants() {
     }
 }
