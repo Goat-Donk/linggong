@@ -176,7 +176,11 @@ d:\linggong\
 
 - **远程仓库**：`https://github.com/Goat-Donk/linggong.git`
 - **GitHub 用户名**：`Goat-Donk`　**邮箱**：`liufazhen1024@163.com`（仅本仓库局部配置，不动全局）
-- **默认分支**：`main`
+- **默认分支**：`main`（稳定线，永远可运行）
+- **分支工作流**（Phase 2 起）：每个 Phase 开 `feat/*` 分支开发，验证通过后合回 `main` 并删分支。
+  - 开分支：`git checkout -b feat/<phase>`（如 `feat/job-cache`、`feat/apply-mq`）
+  - 合回：`git checkout main` → `git merge --no-ff feat/<phase>` → `git push` → 删本地/远程 feature 分支
+  - Phase 0/1 是直接在 main 上提交的（历史已定，不再回溯重改）
 - **提交信息格式**（中文，讲清楚做了什么）：
   ```
   <type>(<scope>): <一句话描述>
