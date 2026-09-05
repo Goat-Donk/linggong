@@ -1,8 +1,11 @@
 package com.linggong.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.ApplyMessage;
+import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
@@ -19,6 +22,9 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 报名服务实现。
@@ -30,6 +36,8 @@ import java.util.Collections;
  *   <li>Lua 原子：查名额 → 一人一单 → 扣名额 → 记标记；</li>
  *   <li>成功则生成雪花单号，发消息到 RabbitMQ，由消费者异步落单。</li>
  * </ol>
+ *
+ * <p>报名状态机：0 待确认 →（雇主审核）1 已录用 / 3 已取消 → 2 已完成。
  */
 @Service
 public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper, JobApplication>
@@ -95,6 +103,60 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
                 JSONUtil.toJsonStr(message));
 
         return Result.ok(orderId);
+    }
+
+    @Override
+    public Result myApplications(Integer page, Integer pageSize) {
+        Long workerId = UserHolder.getUser().getId();
+        // 1. 分页查我的报名记录
+        Page<JobApplication> pageResult = lambdaQuery()
+                .eq(JobApplication::getWorkerId, workerId)
+                .orderByDesc(JobApplication::getCreateTime)
+                .page(new Page<>(page, pageSize));
+
+        // 2. 批量查岗位，拼岗位简要信息
+        List<Long> jobIds = pageResult.getRecords().stream()
+                .map(JobApplication::getJobId)
+                .collect(Collectors.toList());
+        Map<Long, Job> jobMap = jobIds.isEmpty() ? Collections.emptyMap()
+                : jobMapper.selectBatchIds(jobIds).stream()
+                        .collect(Collectors.toMap(Job::getId, job -> job));
+
+        // 3. 组装 DTO
+        List<JobApplicationDTO> dtos = pageResult.getRecords().stream().map(app -> {
+            JobApplicationDTO dto = BeanUtil.copyProperties(app, JobApplicationDTO.class);
+            Job job = jobMap.get(app.getJobId());
+            if (job != null) {
+                dto.setJobName(job.getName());
+                dto.setAddress(job.getAddress());
+                dto.setSalary(job.getSalary());
+            }
+            return dto;
+        }).collect(Collectors.toList());
+
+        return Result.ok(dtos, pageResult.getTotal());
+    }
+
+    @Override
+    public Result audit(Long applicationId, boolean approve) {
+        Long employerId = UserHolder.getUser().getId();
+        // 1. 报名记录存在且处于「待确认」状态
+        JobApplication application = getById(applicationId);
+        if (application == null) {
+            return Result.fail("报名记录不存在");
+        }
+        if (application.getStatus() == null || application.getStatus() != 0) {
+            return Result.fail("该报名已处理，不能重复审核");
+        }
+        // 2. 归属校验：只能审核自己发布岗位下的报名
+        Job job = jobMapper.selectById(application.getJobId());
+        if (job == null || !job.getEmployerId().equals(employerId)) {
+            return Result.fail("只能审核自己发布岗位的报名");
+        }
+        // 3. 状态流转：通过 → 已录用(1)，拒绝 → 已取消(3)
+        application.setStatus(approve ? 1 : 3);
+        updateById(application);
+        return Result.ok();
     }
 
     /**
