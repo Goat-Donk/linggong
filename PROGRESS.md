@@ -203,12 +203,13 @@ d:\linggong\
 - Phase 0 第 3 步：编写 `backend/pom.xml`（依赖：Web / Validation / Redis / **AMQP(RabbitMQ)** / MyBatis-Plus / MySQL / Redisson / Hutool；去掉参考项目的 AI 依赖），`mvn validate` 校验通过。
 - Phase 0 第 4 步：编写代码骨架 —— `application.yml`（MySQL/Redis/RabbitMQ 连接）、主启动类 `LinggongApplication`、统一返回体 `Result`、全局异常 `WebExceptionAdvice`（含参数校验处理），`mvn compile` 编译通过。
 - 环境修复：Docker 的 WSL2 吃满内存导致 Maven 无法启动（报"页面文件太小"），已在 `C:\Users\86135\.wslconfig` 把 WSL 内存 6GB→4GB。
+- Phase 0 第 5 步：编写 `db.sql`（8 张建表脚本 + 岗位分类种子数据；报名记录表 id 用雪花算法、唯一键防重复报名）。
 
 ### 🔄 进行中
 - Phase 0：后端骨架
 
 ### ⏭ 下一步
-- 写 `db.sql`（8 张建表脚本）。
+- 空跑验证：重启 Docker（应用新 WSL 内存限制）→ 执行 `db.sql` 建表 → 启动应用确认无报错。
 
 ---
 
