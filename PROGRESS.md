@@ -164,7 +164,7 @@ d:\linggong\
 |---|---|---|---|
 | **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ✅ 完成 |
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ✅ 完成 |
-| **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ⬜ 未开始 |
+| **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ⬜ 未开始 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
@@ -216,12 +216,19 @@ d:\linggong\
 - Phase 1 第 5 步：启动验证通过 —— curl 端到端测完整链路（发码 → 登录拿 token → /user/me → 改资料 → 看资料 → 退出 → 无 token 返回 401）全部成功。
 - Phase 1 收尾修复：① 发现并修复「改资料后 /user/me 返回旧昵称」—— 新增 `UserService.refreshUserCache()`，改资料后回写 Redis token 缓存 + ThreadLocal；② 环境冲突：本机原生 MySQL（服务「MySQL」）占 3306，Docker MySQL 改映射到 **3307**（docker-compose + application.yml 已同步改）。
 - 环境排查（重要）：本机 16GB 内存未满（空闲 ~7GB），OOM 根因是**页面文件被固定成 2915MB×2（非系统托管）**，导致提交内存上限仅 ~18.6GB，Docker+VSCode+应用一起跑就触顶崩溃。已把 WSL2 内存 4GB→3GB；**建议用户把虚拟内存改为「系统托管」**（需重启）。
+- Phase 2 第 1 步：实体 + Mapper —— `JobCategory`/`Job` 实体、`JobCategoryMapper`/`JobMapper`（空 BaseMapper 接口），`mvn compile` 通过。
+- Phase 2 第 2 步：岗位 CRUD + 分类列表 —— `IJobCategoryService`/`IJobService` 及实现、`JobController`/`JobCategoryController`、`JobDTO`/`JobFormDTO`、`MybatisConfig`（分页插件）、`UserDTO` 加 role 字段。发布仅限雇主（role=1）+ 岗位归属校验 + 起止时间校验，`mvn compile` 通过。
+- Phase 2 第 3 步：岗位详情缓存（穿透 + 击穿）—— 新增 `CacheClient`（set 随机 TTL 防雪崩 / queryWithPassThrough 空对象防穿透 / queryWithMutex 互斥锁防击穿 / delete 缓存失效）、`RedisConstants` 加 cache:job: 与 lock: 常量，`queryById` 改走缓存。自审修复：改/下架岗位后删缓存（缓存一致性）+ 修正黑马点评互斥锁误删锁的瑕疵。`mvn compile` 通过。
+- Phase 2 第 4 步：缓存击穿进阶（逻辑过期）+ 布隆过滤器 —— `RedisData` 逻辑过期包装、`CacheClient` 加 setWithLogicalExpire/queryWithLogicalExpire（异步重建线程池）、`RedissonConfig`（RedissonClient）、`JobBloomFilter`（启动预载岗位 id，初始化失败降级）、`queryById` 改走布隆预判 + 逻辑过期查询（未预热兜底）、publish 新岗位入布隆。`mvn compile` 通过。
+- Phase 2 第 5 步：附近搜索（Redis GEO）—— `RedisConstants` 加 geo:job: 常量、`IJobService.queryNearby`、`JobController /job/nearby`、`JobServiceImpl` 注入 StringRedisTemplate：发布写 GEO / 编辑先删旧分类再加新分类 / 下架移除 GEO、`queryNearby` 用 GEOSEARCH + WITHDIST 按距离升序分页。`mvn compile` 通过。
+- Phase 2 第 6 步：启动验证通过 —— 端到端 curl 测岗位全链路全部成功：① 岗位详情（未登录放行）② 附近搜索（按距离升序、distance 正确）③ 分类分页（total 正确）④ 关键词搜索 ⑤ 下架（成功）⑥ 下架后 GEO 移除（附近搜索不再返回该岗位）⑦ 下架后详情 status=1（缓存已删）⑧ role=0 用户发布被拒（"只有雇主才能发布岗位"）。修复：`LoginInterceptor` 放行 GET /job 浏览类接口（未登录也能逛岗位，写操作仍需登录）。**Phase 2 完成。**
 
 ### 🔄 进行中
-- （无，Phase 1 登录已全部完成）
+- 无（Phase 2 已全部完成，待合并分支后进入 Phase 3）。
 
 ### ⏭ 下一步
-- Phase 2 岗位+缓存：岗位 CRUD、分类列表、附近搜索（Redis GEO）、岗位详情缓存（缓存三问题 + 布隆过滤器 + CacheClient）。
+- Phase 2 收尾：提交 feat/job-cache → 合回 main（--no-ff）→ push → 删分支。
+- Phase 3 报名+秒杀+MQ：报名岗位、限量秒杀（Lua 原子扣名额 + 一人一单）、RabbitMQ 异步落单、雇主审核、防重复报名。
 
 ---
 
