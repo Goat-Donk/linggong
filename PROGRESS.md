@@ -163,7 +163,7 @@ d:\linggong\
 | 阶段 | 内容 | 对应技术点 | 状态 |
 |---|---|---|---|
 | **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ✅ 完成 |
-| **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ⬜ 未开始 |
+| **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | 🔄 进行中 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ⬜ 未开始 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ⬜ 未开始 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ⬜ 未开始 |
@@ -205,12 +205,13 @@ d:\linggong\
 - 环境修复：Docker 的 WSL2 吃满内存导致 Maven 无法启动（报"页面文件太小"），已在 `C:\Users\86135\.wslconfig` 把 WSL 内存 6GB→4GB。
 - Phase 0 第 5 步：编写 `db.sql`（8 张建表脚本 + 岗位分类种子数据；报名记录表 id 用雪花算法、唯一键防重复报名）。
 - Phase 0 第 6 步：空跑验证通过 —— 执行 `db.sql` 建 8 张表，应用启动成功（Tomcat 8080，约 5.8s，无报错）。
+- Phase 1 第 1 步：实体 + DTO + Mapper —— `User`/`UserInfo` 实体、`LoginFormDTO`(带手机号/验证码校验)/`UserDTO`(安全返回)、`UserMapper`/`UserInfoMapper`，`mvn compile` 通过。
 
 ### 🔄 进行中
-- （无，Phase 0 已全部完成）
+- Phase 1 登录 —— 第 1 步（实体 + DTO + Mapper）已完成，进行第 2 步。
 
 ### ⏭ 下一步
-- Phase 1 登录：手机号验证码登录、token 存 Redis、双拦截器（刷新 + 校验）、ThreadLocal、用户资料接口。
+- Phase 1 第 2 步：通用工具 + 配置 —— `RedisConstants`（key 前缀/TTL）、`UserHolder`（ThreadLocal）、`RegexUtils`（手机号校验）、`RedisConfig`（RedisTemplate 序列化）。
 
 ---
 
