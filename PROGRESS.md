@@ -219,12 +219,13 @@ d:\linggong\
 - Phase 2 第 1 步：实体 + Mapper —— `JobCategory`/`Job` 实体、`JobCategoryMapper`/`JobMapper`（空 BaseMapper 接口），`mvn compile` 通过。
 - Phase 2 第 2 步：岗位 CRUD + 分类列表 —— `IJobCategoryService`/`IJobService` 及实现、`JobController`/`JobCategoryController`、`JobDTO`/`JobFormDTO`、`MybatisConfig`（分页插件）、`UserDTO` 加 role 字段。发布仅限雇主（role=1）+ 岗位归属校验 + 起止时间校验，`mvn compile` 通过。
 - Phase 2 第 3 步：岗位详情缓存（穿透 + 击穿）—— 新增 `CacheClient`（set 随机 TTL 防雪崩 / queryWithPassThrough 空对象防穿透 / queryWithMutex 互斥锁防击穿 / delete 缓存失效）、`RedisConstants` 加 cache:job: 与 lock: 常量，`queryById` 改走缓存。自审修复：改/下架岗位后删缓存（缓存一致性）+ 修正黑马点评互斥锁误删锁的瑕疵。`mvn compile` 通过。
+- Phase 2 第 4 步：缓存击穿进阶（逻辑过期）+ 布隆过滤器 —— `RedisData` 逻辑过期包装、`CacheClient` 加 setWithLogicalExpire/queryWithLogicalExpire（异步重建线程池）、`RedissonConfig`（RedissonClient）、`JobBloomFilter`（启动预载岗位 id，初始化失败降级）、`queryById` 改走布隆预判 + 逻辑过期查询（未预热兜底）、publish 新岗位入布隆。`mvn compile` 通过。
 
 ### 🔄 进行中
-- Phase 2 岗位+缓存 —— 第 3 步（缓存穿透 + 击穿）已完成，进行第 4 步。
+- Phase 2 岗位+缓存 —— 第 4 步（逻辑过期 + 布隆过滤器）已完成，进行第 5 步。
 
 ### ⏭ 下一步
-- Phase 2 第 4 步：缓存击穿进阶（逻辑过期异步重建）+ 布隆过滤器 —— `CacheClient` 加 setWithLogicalExpire/queryWithLogicalExpire、`RedisData` 包装类、Redisson `RBloomFilter` 预载岗位 id，`queryById` 升级。
+- Phase 2 第 5 步：附近搜索（Redis GEO）—— 发布岗位时写 GEO（geo:job:{categoryId}），`GEOSEARCH` 按距离查附近岗位，返回带 distance 的 JobDTO。
 
 ---
 

@@ -11,6 +11,7 @@ import com.linggong.entity.Job;
 import com.linggong.mapper.JobMapper;
 import com.linggong.service.IJobService;
 import com.linggong.utils.CacheClient;
+import com.linggong.utils.JobBloomFilter;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.UserHolder;
 import org.springframework.stereotype.Service;
@@ -31,9 +32,11 @@ import java.util.concurrent.TimeUnit;
 public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobService {
 
     private final CacheClient cacheClient;
+    private final JobBloomFilter jobBloomFilter;
 
-    public JobServiceImpl(CacheClient cacheClient) {
+    public JobServiceImpl(CacheClient cacheClient, JobBloomFilter jobBloomFilter) {
         this.cacheClient = cacheClient;
+        this.jobBloomFilter = jobBloomFilter;
     }
 
     @Override
@@ -52,6 +55,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         job.setEmployerId(user.getId());
         job.setStatus(0);
         save(job);
+        // 新岗位 id 加入布隆过滤器
+        jobBloomFilter.add(job.getId());
         return Result.ok(job.getId());
     }
 
@@ -94,14 +99,36 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
 
     @Override
     public Result queryById(Long id) {
-        // 走缓存：穿透（空对象）+ 击穿（互斥锁）+ 雪崩（随机 TTL）由 CacheClient 统一处理
-        Job job = cacheClient.queryWithMutex(
-                RedisConstants.CACHE_JOB_KEY, id, Job.class,
-                this::getById, RedisConstants.CACHE_JOB_TTL, TimeUnit.MINUTES);
+        // 1. 布隆过滤器预判：一定不存在直接返回（缓存穿透第一道防线）
+        if (!jobBloomFilter.mightContain(id)) {
+            return Result.fail("岗位不存在");
+        }
+        // 2. 逻辑过期缓存查询（热点岗位击穿：异步重建 + 返回旧数据，可用性优先）
+        Job job = queryJobWithLogicalExpire(id);
         if (job == null) {
             return Result.fail("岗位不存在");
         }
         return Result.ok(BeanUtil.copyProperties(job, JobDTO.class));
+    }
+
+    /**
+     * 逻辑过期缓存查询：缓存未命中（未预热）时兜底查库并预热。
+     */
+    private Job queryJobWithLogicalExpire(Long id) {
+        Job job = cacheClient.queryWithLogicalExpire(
+                RedisConstants.CACHE_JOB_KEY, id, Job.class,
+                this::getById, RedisConstants.CACHE_JOB_TTL, TimeUnit.MINUTES);
+        if (job != null) {
+            return job;
+        }
+        // 缓存未预热：查库 + 写逻辑过期缓存
+        Job dbJob = getById(id);
+        if (dbJob == null) {
+            return null;
+        }
+        cacheClient.setWithLogicalExpire(RedisConstants.CACHE_JOB_KEY + id, dbJob,
+                RedisConstants.CACHE_JOB_TTL, TimeUnit.MINUTES);
+        return dbJob;
     }
 
     @Override

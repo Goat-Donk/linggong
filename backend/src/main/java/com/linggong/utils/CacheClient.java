@@ -2,10 +2,14 @@ package com.linggong.utils;
 
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -25,6 +29,9 @@ public class CacheClient {
 
     private final StringRedisTemplate stringRedisTemplate;
 
+    /** 逻辑过期异步重建线程池（教学项目，生命周期随 JVM，未做优雅关闭） */
+    private final ExecutorService rebuildExecutor = Executors.newFixedThreadPool(10);
+
     public CacheClient(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -42,6 +49,61 @@ public class CacheClient {
      */
     public void delete(String key) {
         stringRedisTemplate.delete(key);
+    }
+
+    /**
+     * 写入逻辑过期缓存：value 包装成 {@link RedisData}（逻辑过期时间 + 数据），key 物理上不过期。
+     */
+    public void setWithLogicalExpire(String key, Object value, Long time, TimeUnit unit) {
+        RedisData redisData = new RedisData();
+        redisData.setData(value);
+        redisData.setExpireTime(LocalDateTime.now().plusSeconds(unit.toSeconds(time)));
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
+    }
+
+    /**
+     * 逻辑过期查询（击穿进阶方案，可用性优先）：缓存过期时不阻塞等待，直接返回旧数据，后台异步重建。
+     *
+     * <p>依赖缓存预热（key 必须已存在），未命中返回 null，由调用方兜底。
+     */
+    public <R, ID> R queryWithLogicalExpire(String keyPrefix, ID id, Class<R> type,
+                                            Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+        String key = keyPrefix + id;
+        // 1. 查缓存
+        String json = stringRedisTemplate.opsForValue().get(key);
+        // 未命中（未预热），返回 null
+        if (StrUtil.isBlank(json)) {
+            return null;
+        }
+        // 2. 反序列化 RedisData
+        RedisData redisData = JSONUtil.toBean(json, RedisData.class);
+        R r = JSONUtil.toBean((JSONObject) redisData.getData(), type);
+        LocalDateTime expireTime = redisData.getExpireTime();
+        // 3. 未过期，直接返回
+        if (expireTime.isAfter(LocalDateTime.now())) {
+            return r;
+        }
+        // 4. 已过期：加锁，抢到锁的线程异步重建，其余线程直接返回旧数据
+        String lockKey = RedisConstants.LOCK_KEY_PREFIX + key;
+        if (tryLock(lockKey)) {
+            rebuildExecutor.submit(() -> {
+                try {
+                    R r1 = dbFallback.apply(id);
+                    if (r1 == null) {
+                        // 数据已被删除，删缓存避免存空
+                        stringRedisTemplate.delete(key);
+                    } else {
+                        setWithLogicalExpire(key, r1, time, unit);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException("缓存逻辑过期重建失败", e);
+                } finally {
+                    unlock(lockKey);
+                }
+            });
+        }
+        // 5. 返回旧数据（可用性优先，不阻塞用户）
+        return r;
     }
 
     /**
