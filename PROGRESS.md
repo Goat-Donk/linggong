@@ -162,7 +162,7 @@ d:\linggong\
 
 | 阶段 | 内容 | 对应技术点 | 状态 |
 |---|---|---|---|
-| **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | ⬜ 未开始 |
+| **Phase 0 地基** | 骨架、pom、配置、统一返回/异常/校验、db.sql、空跑 | 工程规范 | 🔄 进行中 |
 | **Phase 1 登录** | 验证码登录、token、双拦截器、ThreadLocal、用户资料 | 认证/拦截器 | ⬜ 未开始 |
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ⬜ 未开始 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ⬜ 未开始 |
@@ -198,12 +198,14 @@ d:\linggong\
 - 关联远程 `origin` = `https://github.com/Goat-Donk/linggong.git`，连通验证通过（空仓库）。
 - 首次提交完成：进度清单 `PROGRESS.md` + `.gitignore`。
 - 首次 push 到 GitHub 成功（main 分支已上线远程，本机凭据已就绪）。
+- Phase 0 第 1 步：编写 `docker-compose.yml`（MySQL 8.0 / Redis 7 / RabbitMQ 3-management，含健康检查与数据卷），待启动验证。
 
 ### 🔄 进行中
-- （无）
+- Phase 0：后端骨架
 
 ### ⏭ 下一步
-- Phase 0：后端骨架 —— `pom.xml`、`application.yml`（MySQL/Redis/RabbitMQ 配置）、统一 `Result`、全局异常、参数校验、`db.sql` 建表脚本、空跑验证。
+- 启动三个服务：`docker compose up -d`，确认 3306 / 6379 / 5672 / 15672 端口正常。
+- 然后写 `backend/pom.xml`。
 
 ---
 
