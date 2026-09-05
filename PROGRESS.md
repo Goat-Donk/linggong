@@ -196,9 +196,10 @@ d:\linggong\
 - Git 本地仓库初始化（main 分支）。
 - 配置本仓库 donk 身份（Goat-Donk / liufazhen1024@163.com）。
 - 关联远程 `origin` = `https://github.com/Goat-Donk/linggong.git`，连通验证通过（空仓库）。
+- 首次提交完成：进度清单 `PROGRESS.md` + `.gitignore`。
 
 ### 🔄 进行中
-- 写入进度清单 + .gitignore，做首次提交。
+- （无）
 
 ### ⏭ 下一步
 - Phase 0：后端骨架 —— `pom.xml`、`application.yml`（MySQL/Redis/RabbitMQ 配置）、统一 `Result`、全局异常、参数校验、`db.sql` 建表脚本、空跑验证。
