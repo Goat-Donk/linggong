@@ -216,12 +216,13 @@ d:\linggong\
 - Phase 1 第 5 步：启动验证通过 —— curl 端到端测完整链路（发码 → 登录拿 token → /user/me → 改资料 → 看资料 → 退出 → 无 token 返回 401）全部成功。
 - Phase 1 收尾修复：① 发现并修复「改资料后 /user/me 返回旧昵称」—— 新增 `UserService.refreshUserCache()`，改资料后回写 Redis token 缓存 + ThreadLocal；② 环境冲突：本机原生 MySQL（服务「MySQL」）占 3306，Docker MySQL 改映射到 **3307**（docker-compose + application.yml 已同步改）。
 - 环境排查（重要）：本机 16GB 内存未满（空闲 ~7GB），OOM 根因是**页面文件被固定成 2915MB×2（非系统托管）**，导致提交内存上限仅 ~18.6GB，Docker+VSCode+应用一起跑就触顶崩溃。已把 WSL2 内存 4GB→3GB；**建议用户把虚拟内存改为「系统托管」**（需重启）。
+- Phase 2 第 1 步：实体 + Mapper —— `JobCategory`/`Job` 实体、`JobCategoryMapper`/`JobMapper`（空 BaseMapper 接口），`mvn compile` 通过。
 
 ### 🔄 进行中
-- （无，Phase 1 登录已全部完成）
+- Phase 2 岗位+缓存 —— 第 1 步（实体 + Mapper）已完成，进行第 2 步。
 
 ### ⏭ 下一步
-- Phase 2 岗位+缓存：岗位 CRUD、分类列表、附近搜索（Redis GEO）、岗位详情缓存（缓存三问题 + 布隆过滤器 + CacheClient）。
+- Phase 2 第 2 步：分类列表 + 岗位 CRUD（Service + Controller）—— 发布/编辑/下架/详情/分类分页/关键词搜索（先直接查库，缓存留第 3 步）。
 
 ---
 
