@@ -167,7 +167,7 @@ d:\linggong\
 | **Phase 2 岗位+缓存** | 岗位 CRUD、分类、附近搜索、岗位详情缓存 | 缓存三问题、GEO、布隆 | ✅ 完成 |
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
-| **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ⬜ 未开始 |
+| **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | 🔄 进行中 |
 | **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
 
 ---
@@ -236,12 +236,13 @@ d:\linggong\
 
 - Phase 4 第 5 步：启动验证通过 —— 端到端 8 项全通过：① 签到（0→1→幂等 1，未登录 401，bitmap 位正确）② 发布动态+我的动态 ③ 关注/取关（DB+Redis 双写一致）④ 是否关注 ⑤ 共同关注 ⑥ 推流（关注滚入历史 3 条 + 发布推粉丝）⑦ 滚动分页（lastId+offset 无丢无重）⑧ 点赞（切换+DB 同步）。**Phase 4 完成。**
 
+- Phase 5 第 1 步：互评 —— `JobEvaluation` 实体 + `JobEvaluationMapper`、`EvaluationFormDTO`（评分 1-5 校验）+ `EvaluationDTO`（含评价/被评人昵称头像）、`IJobEvaluationService`/`JobEvaluationServiceImpl`（发布：岗位存在 + 不能评自己 + 雇佣双方关系 + 工人已报名 + 防重复评价；查询：分页 + 批量查用户避免 N+1）、`EvaluationController`（POST /evaluation、GET /evaluation/job/{jobId}）。`mvn compile` 通过。
+
 ### 🔄 进行中
-- 无（Phase 4 已全部完成，待合回 main）。
+- Phase 5 互评+上传+收尾 —— 第 1 步（互评）已完成，进行第 2 步。
 
 ### ⏭ 下一步
-- 合回 feat/social-feed → main（--no-ff）并 push、删分支。
-- Phase 5 互评+上传+收尾：互评、文件上传、Knife4j 文档。
+- Phase 5 第 2 步：文件上传 —— 头像/岗位图/晒单图本地存储 + 静态资源映射。
 
 ---
 
