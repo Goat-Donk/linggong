@@ -50,4 +50,17 @@ public class BlogController {
     public Result like(@PathVariable("id") Long id) {
         return blogService.like(id);
     }
+
+    /**
+     * 关注的人动态（滚动分页）。
+     *
+     * <p>滚动分页：首次请求只传 offset=0（lastId 省略，内部取当前时间）；
+     * 后续把上一页返回的 minTime 当 lastId、offset 当 offset 传回。
+     */
+    @GetMapping("/of/follow")
+    public Result queryBlogOfFollow(@RequestParam(value = "lastId", required = false) Long lastId,
+                                    @RequestParam(value = "offset", defaultValue = "0") Integer offset,
+                                    @RequestParam(value = "pageSize", defaultValue = "3") Integer pageSize) {
+        return blogService.queryBlogOfFollow(lastId, offset, pageSize);
+    }
 }

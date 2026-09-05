@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.Result;
 import com.linggong.dto.UserDTO;
+import com.linggong.entity.Blog;
 import com.linggong.entity.Follow;
+import com.linggong.mapper.BlogMapper;
 import com.linggong.mapper.FollowMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IFollowService;
@@ -14,6 +16,8 @@ import com.linggong.utils.UserHolder;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -27,16 +31,24 @@ import java.util.stream.Collectors;
  *   <li>DB tb_follow：持久化，供 Feed 推流时查粉丝；</li>
  *   <li>Redis Set（follows:{userId}）：快速判断是否关注 + 求共同关注（SINTER）。</li>
  * </ul>
+ * 关注成功时，把被关注者最近的历史动态滚入当前用户收件箱（feed:{userId}）。
  */
 @Service
 public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> implements IFollowService {
 
+    /** 关注时向收件箱滚动推送对方最近的历史动态条数 */
+    private static final int FOLLOW_ROLL_BLOG_LIMIT = 3;
+
     private final StringRedisTemplate stringRedisTemplate;
     private final UserMapper userMapper;
+    private final BlogMapper blogMapper;
 
-    public FollowServiceImpl(StringRedisTemplate stringRedisTemplate, UserMapper userMapper) {
+    public FollowServiceImpl(StringRedisTemplate stringRedisTemplate,
+                             UserMapper userMapper,
+                             BlogMapper blogMapper) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.userMapper = userMapper;
+        this.blogMapper = blogMapper;
     }
 
     @Override
@@ -55,6 +67,8 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
             follow.setFollowUserId(followUserId);
             save(follow);
             stringRedisTemplate.opsForSet().add(key, followUserId.toString());
+            // 推流：关注成功后，把对方最近的历史动态滚入当前用户收件箱
+            rollFeedOnFollow(userId, followUserId);
         } else {
             // 取关：DB 删记录 + Redis 移除（幂等）
             remove(new LambdaQueryWrapper<Follow>()
@@ -88,5 +102,31 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
                 .map(user -> BeanUtil.copyProperties(user, UserDTO.class))
                 .collect(Collectors.toList());
         return Result.ok(users);
+    }
+
+    /**
+     * 关注成功时，把被关注者最近的历史动态滚入当前用户收件箱。
+     *
+     * <p>score 用动态的创建时间（毫秒），与发布时推流保持一致的「时间越新越大」排序。
+     */
+    private void rollFeedOnFollow(Long userId, Long followUserId) {
+        List<Blog> blogs = blogMapper.selectList(new LambdaQueryWrapper<Blog>()
+                .eq(Blog::getUserId, followUserId)
+                .orderByDesc(Blog::getId)
+                .last("LIMIT " + FOLLOW_ROLL_BLOG_LIMIT));
+        if (blogs == null || blogs.isEmpty()) {
+            return;
+        }
+        for (Blog blog : blogs) {
+            long score = blog.getCreateTime() == null
+                    ? System.currentTimeMillis()
+                    : toEpochMilli(blog.getCreateTime());
+            stringRedisTemplate.opsForZSet().add(
+                    RedisConstants.FEED_KEY + userId, blog.getId().toString(), score);
+        }
+    }
+
+    private long toEpochMilli(LocalDateTime time) {
+        return time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 }

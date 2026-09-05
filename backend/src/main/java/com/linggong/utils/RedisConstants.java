@@ -44,6 +44,9 @@ public final class RedisConstants {
     /** 动态点赞用户集合 key 前缀，完整 key = blog:liked:{blogId}（Set，存点赞用户 id） */
     public static final String BLOG_LIKED_KEY = "blog:liked:";
 
+    /** Feed 收件箱 key 前缀，完整 key = feed:{userId}（ZSet，member=动态 id，score=时间戳） */
+    public static final String FEED_KEY = "feed:";
+
     private RedisConstants() {
     }
 }
