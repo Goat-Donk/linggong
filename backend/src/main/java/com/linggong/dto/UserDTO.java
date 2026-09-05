@@ -15,4 +15,7 @@ public class UserDTO {
     private String nickName;
 
     private String icon;
+
+    /** 角色：0 打工人，1 雇主 */
+    private Integer role;
 }
