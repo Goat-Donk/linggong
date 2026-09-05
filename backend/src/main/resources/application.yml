@@ -1,0 +1,51 @@
+# ============================================================
+# 本地零工平台 —— 后端配置
+# 连接信息与 docker-compose.yml 保持一致，仅本地开发用。
+# 生产环境请改用环境变量 / 配置中心，不要把真实密码提交到仓库。
+# ============================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: linggong-backend
+
+  # ---------- MySQL ----------
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/linggong?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: "123456"   # 与 docker-compose.yml 的 MYSQL_ROOT_PASSWORD 一致
+
+  # ---------- Redis ----------
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # 教学阶段不设密码（与 docker-compose.yml 一致）
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: 100ms
+
+  # ---------- RabbitMQ ----------
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    # 注意：listener 手动 ACK / 发布确认等进阶配置，放到 Phase 3 秒杀时再加
+
+# ---------- MyBatis-Plus ----------
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true          # 下划线转驼峰
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl   # 开发期打印 SQL
+
+# ---------- 日志 ----------
+logging:
+  level:
+    com.linggong: debug

@@ -201,12 +201,14 @@ d:\linggong\
 - Phase 0 第 1 步：编写 `docker-compose.yml`（MySQL 8.0 / Redis 7 / RabbitMQ 3-management，含健康检查与数据卷）。
 - Phase 0 第 2 步：环境就绪 —— 三个服务已启动并验证（MySQL `linggong` 库已建、Redis `PONG`、RabbitMQ 运行正常）；顺带清理了本机残留的 smart-raffle 容器/数据卷以释放 5672/6379 端口。
 - Phase 0 第 3 步：编写 `backend/pom.xml`（依赖：Web / Validation / Redis / **AMQP(RabbitMQ)** / MyBatis-Plus / MySQL / Redisson / Hutool；去掉参考项目的 AI 依赖），`mvn validate` 校验通过。
+- Phase 0 第 4 步：编写代码骨架 —— `application.yml`（MySQL/Redis/RabbitMQ 连接）、主启动类 `LinggongApplication`、统一返回体 `Result`、全局异常 `WebExceptionAdvice`（含参数校验处理），`mvn compile` 编译通过。
+- 环境修复：Docker 的 WSL2 吃满内存导致 Maven 无法启动（报"页面文件太小"），已在 `C:\Users\86135\.wslconfig` 把 WSL 内存 6GB→4GB。
 
 ### 🔄 进行中
 - Phase 0：后端骨架
 
 ### ⏭ 下一步
-- 写 `application.yml` + 主启动类 `LinggongApplication` + 统一 `Result` + 全局异常 + 参数校验。
+- 写 `db.sql`（8 张建表脚本）。
 
 ---
 
