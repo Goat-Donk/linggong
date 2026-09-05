@@ -198,14 +198,14 @@ d:\linggong\
 - 关联远程 `origin` = `https://github.com/Goat-Donk/linggong.git`，连通验证通过（空仓库）。
 - 首次提交完成：进度清单 `PROGRESS.md` + `.gitignore`。
 - 首次 push 到 GitHub 成功（main 分支已上线远程，本机凭据已就绪）。
-- Phase 0 第 1 步：编写 `docker-compose.yml`（MySQL 8.0 / Redis 7 / RabbitMQ 3-management，含健康检查与数据卷），待启动验证。
+- Phase 0 第 1 步：编写 `docker-compose.yml`（MySQL 8.0 / Redis 7 / RabbitMQ 3-management，含健康检查与数据卷）。
+- Phase 0 第 2 步：环境就绪 —— 三个服务已启动并验证（MySQL `linggong` 库已建、Redis `PONG`、RabbitMQ 运行正常）；顺带清理了本机残留的 smart-raffle 容器/数据卷以释放 5672/6379 端口。
 
 ### 🔄 进行中
 - Phase 0：后端骨架
 
 ### ⏭ 下一步
-- 启动三个服务：`docker compose up -d`，确认 3306 / 6379 / 5672 / 15672 端口正常。
-- 然后写 `backend/pom.xml`。
+- 写 `backend/pom.xml`（依赖清单）。
 
 ---
 
