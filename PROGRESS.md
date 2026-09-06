@@ -246,6 +246,8 @@ d:\linggong\
 
 - diff 对齐（补缺）：对照本地黑马点评参考后端逐文件 diff，补两处缺口 —— ① 登录用户存储 JSON→Redis Hash（`UserServiceImpl` login/refreshUserCache 用 `opsForHash().putAll` 写、`RefreshTokenInterceptor` 用 `entries`+`fillBeanWithMap` 读、token TTL 加随机值）；② 补 `ILock`+`SimpleRedisLock` 教学版分布式锁（SET NX EX 加锁 + 判断线程标识释放，注释说明演化线到 Redisson）。编译 + 端到端登录验证通过（token 存成 hash、/user/me 正确转回 id/role）。**diff 对齐完成。**
 
+- diff 对齐（三方比对，SimpleRedisLock 补原子释放）：拿到真·原版 `F:\BaiduNetdiskDownload\hm-dianping` 后三方比对，确认 CacheClient / UserHolder / 登录 Hash 本就贴合原版；唯一偏离是 SimpleRedisLock 照抄了增强版「非原子 check-then-delete」的写法，已改回原版 `lua/unlock.lua` 原子释放（DefaultRedisScript 执行 get+compare+del 一步原子）。编译通过，`unlock.lua` 逻辑验证通过（标识一致删除、不一致不删）。**三方对齐完成。**
+
 ### 🔄 进行中
 - 无（Phase 0~5 已全部合入 `main` 并推远程）。
 
