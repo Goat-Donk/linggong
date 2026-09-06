@@ -9,3 +9,8 @@ export function getJobsByCategory(categoryId, page, pageSize) {
 export function getNearbyJobs(params) {
   return request.get('/job/nearby', { params })
 }
+
+// 岗位详情
+export function getJobById(id) {
+  return request.get(`/job/${id}`)
+}

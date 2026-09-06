@@ -254,11 +254,13 @@ d:\linggong\
 
 - Phase 6 第 3 步：首页（岗位列表 + 分类 + 附近搜索）—— 新增 `api/category.js`（getCategories）、`api/job.js`（getJobsByCategory/getNearbyJobs）、`utils/format.js`（距离/薪资/日期格式化）、`views/JobDetail.vue`（占位，Step 4 补）；重写 `Home.vue`（分类 Tab + 「只看附近」开关 + van-list 无限滚动岗位卡片）：分类 Tab 用 `v-model:active` 绑分类 id、附近模式用浏览器 `navigator.geolocation` 先定位成功再切换、筛选变化用 `:key` 重挂载 van-list 触发重新加载、`requestSeq` 序号丢弃在途旧请求防串数据、空状态 van-empty；`router` 加 `/job/:id` 占位路由。经代理实测：分类列表 6 个、按分类分页 total=4、附近搜索（上海坐标）返回 2 个岗位 `distance:0.19m`、偏移坐标超 5km 半径返回空（GEO 半径生效）。修复 1 处缺陷：附近搜索后端不返回 total，分页判断改为「不满一页 或 有 total 且已累计到 total」双条件，避免首页就误判到底。
 
+- Phase 6 第 4 步：岗位详情 + 报名 —— 新增 `api/application.js`（applyJob）、`api/job.js` 补 getJobById、`api/user.js` 补 getUserById；重写 `JobDetail.vue`（岗位信息卡 + 地址/时间/名额 + 发布者卡 + 岗位描述 + 底部固定报名按钮）：发布者信息需登录（`/user/{id}` 不在 LoginInterceptor 放行列表），匿名跳过不影响浏览；报名按钮按「已下架/自己发布/已报名/立即报名」动态禁用与文案；点击报名未登录先跳登录带 redirect，登录后 POST `/job-application/{id}`；成功 toast + 按钮变已报名，失败由 request.js Toast（名额满/重复报名/报自己岗位）。经代理实测：详情返回完整 JobDTO（distance=null）、新工人报名成功返回雪花单号、重复报名拦截、匿名报名 401。**注**：后端最终实现无「普通岗/限量岗」分流，所有报名统一走 Lua 秒杀 + MQ 落单，前端无需区分。
+
 ### 🔄 进行中
-- Phase 6 前端（Step 4 岗位详情 + 报名 进行中）。
+- Phase 6 前端（Step 5 发布岗位 + 我的报名/审核 进行中）。
 
 ### ⏭ 下一步
-- Phase 6 Step 4：岗位详情页 + 报名（普通岗直接报名，热门限量岗走秒杀）。
+- Phase 6 Step 5：发布岗位（雇主）+ 我的报名记录 + 雇主审核报名。
 
 ---
 

@@ -17,6 +17,11 @@ export function getMe() {
   return request.get('/user/me')
 }
 
+// 查看他人主页（data 为 UserDTO：id/nickName/icon/role，需登录）
+export function getUserById(id) {
+  return request.get(`/user/${id}`)
+}
+
 // 退出登录（后端删 token）
 export function logout() {
   return request.post('/user/logout')
