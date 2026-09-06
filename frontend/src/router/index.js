@@ -21,6 +21,12 @@ const routes = [
     name: 'profile',
     component: () => import('@/views/Profile.vue'),
     meta: { title: '我的', requiresAuth: true }
+  },
+  {
+    path: '/job/:id',
+    name: 'jobDetail',
+    component: () => import('@/views/JobDetail.vue'),
+    meta: { title: '岗位详情' }
   }
 ]
 

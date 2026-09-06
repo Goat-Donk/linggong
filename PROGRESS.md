@@ -252,11 +252,13 @@ d:\linggong\
 
 - Phase 6 第 2 步：登录 + 鉴权 —— 新增 `stores/user.js`（reactive 单例 + localStorage 存 token/info，不引 Pinia，状态复杂再上）、`api/user.js`（sendCode/login/getMe/logout，对齐后端 UserController）；重写 `Login.vue`（手机号+验证码登录：60s 倒计时防重发、van-form 校验、登录成功先存 token 再拉 `/user/me` 存用户信息、跳回 `redirect` 来源页）；`router` 加 `beforeEach` 鉴权守卫（`requiresAuth` 无 token 跳登录并带 redirect）；`Home.vue` 展示登录态（昵称+角色 tag）；新增受保护占位页 `Profile.vue`（用户卡片 + 退出登录）。经 Vite 代理实测端到端：发码 → 登录拿 token → `/user/me` 返回 `{id:1,nickName:"老李",icon:"",role:1}` 全通，无 token 返回 401。
 
+- Phase 6 第 3 步：首页（岗位列表 + 分类 + 附近搜索）—— 新增 `api/category.js`（getCategories）、`api/job.js`（getJobsByCategory/getNearbyJobs）、`utils/format.js`（距离/薪资/日期格式化）、`views/JobDetail.vue`（占位，Step 4 补）；重写 `Home.vue`（分类 Tab + 「只看附近」开关 + van-list 无限滚动岗位卡片）：分类 Tab 用 `v-model:active` 绑分类 id、附近模式用浏览器 `navigator.geolocation` 先定位成功再切换、筛选变化用 `:key` 重挂载 van-list 触发重新加载、`requestSeq` 序号丢弃在途旧请求防串数据、空状态 van-empty；`router` 加 `/job/:id` 占位路由。经代理实测：分类列表 6 个、按分类分页 total=4、附近搜索（上海坐标）返回 2 个岗位 `distance:0.19m`、偏移坐标超 5km 半径返回空（GEO 半径生效）。修复 1 处缺陷：附近搜索后端不返回 total，分页判断改为「不满一页 或 有 total 且已累计到 total」双条件，避免首页就误判到底。
+
 ### 🔄 进行中
-- Phase 6 前端（Step 3 首页：岗位列表 + 分类 + 附近搜索 进行中）。
+- Phase 6 前端（Step 4 岗位详情 + 报名 进行中）。
 
 ### ⏭ 下一步
-- Phase 6 Step 3：首页（岗位列表 + 分类 Tab + 附近搜索）。
+- Phase 6 Step 4：岗位详情页 + 报名（普通岗直接报名，热门限量岗走秒杀）。
 
 ---
 
