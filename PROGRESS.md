@@ -17,7 +17,7 @@
 | 角色 | 打工人（求职者）、雇主（发布者）。一个用户可兼任两种身份 |
 | 包名 | `com.linggong` |
 | 后端 ArtifactId | `linggong-backend` |
-| 前端 | 后期再做（移动端 H5，与黑马点评类似风格，但不复用其代码） |
+| 前端 | 移动端 H5（Vue3 + Vite + Vant4，自己写不复用黑马点评） |
 | 是否追性能指标 | 否，重点是学技术、写规范，不追求 QPS/压测 |
 
 ### 目录结构
@@ -32,7 +32,7 @@ d:\linggong\
 │       ├── controller/  service/(impl)  mapper/  entity/  dto/
 │       ├── config/      interceptor/    utils/
 │       └── resources/(application.yml, logback.xml, mapper/*.xml, lua/*.lua, db.sql)
-└── frontend/            # 前端（后期，移动端 H5）
+└── frontend/            # 前端（移动端 H5，Vue3 + Vite + Vant4）
 ```
 
 ### 环境要求
@@ -168,7 +168,7 @@ d:\linggong\
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ✅ 完成 |
-| **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
+| **Phase 6 前端** | 移动端 H5，连后端 | Vue3 + Vite + Vant4 | 🔄 进行中 |
 
 ---
 
@@ -248,11 +248,13 @@ d:\linggong\
 
 - diff 对齐（三方比对，SimpleRedisLock 补原子释放）：拿到真·原版 `F:\BaiduNetdiskDownload\hm-dianping` 后三方比对，确认 CacheClient / UserHolder / 登录 Hash 本就贴合原版；唯一偏离是 SimpleRedisLock 照抄了增强版「非原子 check-then-delete」的写法，已改回原版 `lua/unlock.lua` 原子释放（DefaultRedisScript 执行 get+compare+del 一步原子）。编译通过，`unlock.lua` 逻辑验证通过（标识一致删除、不一致不删）。**三方对齐完成。**
 
+- Phase 6 第 1 步：前端初始化 —— 手写 Vite + Vue3 脚手架（`frontend/`，不用 `npm create vite` 的示例模板）：`package.json` 锁定 vue@3.5 / vue-router@4.6 / axios@1.20 / vant@4.10 / vite@6.4；`vite.config.js` 配 `/api` 代理到后端 8080（`rewrite` 去前缀，开发期免 CORS）；`main.js` 全量引入 Vant + router；`App.vue` 全局基础样式（移动端 viewport + reset）；`router/index.js` 建 home/login 占位路由 + 标题联动；`utils/request.js` 封装 axios（authorization 头放裸 token 无 Bearer 前缀、响应拦截统一处理 Result、401 清 token 跳登录）；`views/Home.vue`/`Login.vue` 占位页。`npm run build` 通过（302 模块，5.3s）。
+
 ### 🔄 进行中
-- 无（Phase 0~5 已全部合入 `main` 并推远程）。
+- Phase 6 前端（Step 2 登录 + 鉴权拦截 进行中）。
 
 ### ⏭ 下一步
-- 进入 Phase 6 前端（移动端 H5，Vue，自己写不复用黑马点评）。
+- Phase 6 Step 2：登录页（手机号 + 验证码）+ 鉴权路由守卫（token 不存在跳登录）。
 
 ---
 
