@@ -272,12 +272,13 @@ d:\linggong\
 - 全面功能验证 + 分类数据修复：对 8 大模块（登录/岗位/报名/关注/Feed/签到/互评/上传 + 接口文档/前端 nginx）端到端验证约 87 项全部通过，核心链路（登录→发岗→Lua 秒杀→MQ 落单→审核→互评）闭环正常。发现并修复 1 个数据 bug：`tb_job_category` 种子数据历史被错误字符集导入导致乱码（双重编码，非代码 bug），已用 pymysql 按 db.sql 种子数据改正 6 条分类名，`/job-category/list` 及 nginx 反代均返回正确中文。
 - 前端体验修复（导航 TabBar）：用户反馈「个人页退不回主页」。根因：前端无底部 TabBar，`Profile` 被当一级页设计却无回首页入口（二级页其实都已带返回箭头）。修复 —— ① `App.vue` 加 `van-tabbar`（首页/动态/我的三 tab，route 模式按当前路径高亮，`showTabbar` 仅 `/home` `/feed` `/profile` 显示，二级页仍用顶栏返回箭头）；② `Feed.vue` 顶栏去掉返回箭头（与首页/我的对齐为 tab 一级页）；③ `Profile.vue` 加 `padding-bottom: 80px` 让出 TabBar 空间；④ `Home.vue`/`Feed.vue` 发布悬浮按钮 `bottom` 40px→70px（避免被 TabBar 压住）。`npm run build` 通过（nginx root 直指 dist，即时生效）。
 - 界面美化（松蓝 · 清爽专业）：用户选定「松蓝」配色方向，做全局视觉升级 —— ① 新建 `src/styles/theme.css` 定义品牌色 token（主色 #2563eb）+ 覆盖 Vant CSS 变量（主色/文字/背景/边框/功能色），`main.js` 在 vant css 后引入；② `App.vue` body 用 token 色；③ `Home.vue` 加首页 hero 品牌区（松蓝渐变）+ 卡片圆角 12px + 轻阴影；④ `Login.vue` logo 松蓝渐变、`Profile.vue` 用户卡改松蓝渐变头部（角色 tag 白半透明）；⑤ 统一 `Home/Feed/Profile/JobDetail/MyBlogs/MyApplications/EmployerApplications` 卡片（圆角 12px + 阴影 + 文字 token 色）；⑥ 评分星色改主题色、薪资红用 token 危险色。`npm run build` 通过。
+- 造种子数据（可复用脚本）：新增 `tools/seed_data.py`（确定性可复现，`python tools/seed_data.py` 一键重建），清空测试残留并造真实零工场景演示数据 —— ① 数据规模：用户 50（雇主 14 + 打工人 36，含本人账号 13581043338 昵称「阿禾」）、岗位 40（6 分类各 5~6 上架 + 每分类 1 个历史下架）、报名 80（雪花 id，状态 0待确认/1已录用/2已完成/3已取消 混合）、互评 48、关注 26、动态 30；② 同步预热 Redis（FLUSHDB 后重写）：岗位 GEO（geo:job:{分类}）、报名名额（apply:stock:{岗位} = headcount - 已占）、关注集合（follows:{用户}）、Feed 收件箱（feed:{用户}，按关注滚入最近 3 条）；③ 数据完整性校验全过（无非法外键引用、无重复报名、雪花 id 唯一为正、无自关注）；④ 关键坑修复：岗位详情走布隆过滤器（启动预载），故造完数据须**重启后端**让布隆重新预载，否则详情报「岗位不存在」——已重启并验证详情/附近/Feed 全通；⑤ 自审发现「6 个下架岗位全落在发传单分类」的分布 bug，改为每分类下架 1 个。端到端验证：分类 6 个、岗位列表 34 上架（6/6/6/6/5/5）、详情 200、附近搜索按距离排序 6 个、关注流 5 条、本人账号 1 条报名，全部正常。
 
 ### 🔄 进行中
 - 无（Phase 0–6 全部完成）。
 
 ### ⏭ 下一步
-- 造种子数据（用户 ~50、岗位 ~40、动态 ~30、报名 ~60、互评 ~40、关注 ~30，让页面有内容可看）。
+- 无（项目功能 + 前端 + 种子数据全部完成，可自由体验；如继续可考虑：数据统计看板、前端骨架屏/懒加载、Docker 一键化后端部署等）。
 
 ---
 
