@@ -1,0 +1,50 @@
+/* ============================================================
+ * 全局主题：松蓝 · 清爽专业
+ *
+ * 1. 品牌色 token：各页面 scoped 样式统一引用这里，避免散落的硬编码色值。
+ * 2. Vant 主题覆盖：Vant4 通过 CSS 变量定制主题，这里重定义主色/文字/背景，
+ *    让全站按钮、tab、开关、标签、评分等组件主色从默认蓝 #1989fa 换成松蓝。
+ *
+ * 注意：本文件必须在 `vant/lib/index.css` 之后引入（见 main.js），
+ * 否则会被 Vant 默认变量覆盖。
+ * ============================================================ */
+
+:root {
+  /* ---------- 品牌色 ---------- */
+  --brand-primary: #2563eb;       /* 松蓝主色 */
+  --brand-primary-light: #3b82f6; /* 松蓝浅（渐变起） */
+  --brand-primary-deep: #1d4ed8;  /* 松蓝深（渐变尾 / 按压） */
+  --brand-accent: #0ea5e9;        /* 天蓝点缀 */
+  --brand-primary-bg: #eff6ff;    /* 松蓝浅底（选中 / 标签底） */
+
+  /* ---------- 中性色 ---------- */
+  --bg-page: #f5f7fa;             /* 页面冷灰底 */
+  --bg-card: #ffffff;             /* 卡片白底 */
+  --text-primary: #1e293b;        /* 主文字 深蓝灰 */
+  --text-secondary: #475569;      /* 次文字 灰蓝 */
+  --text-tertiary: #94a3b8;       /* 弱文字 浅灰蓝 */
+  --border-color: #e2e8f0;        /* 边框 / 分割线 */
+
+  /* ---------- 功能色 ---------- */
+  --danger: #ef4444;              /* 危险红 */
+  --success: #10b981;             /* 成功绿 */
+  --warning: #f59e0b;             /* 警示橙 */
+
+  /* ---------- 卡片 ---------- */
+  --radius-card: 12px;            /* 卡片圆角 */
+  --shadow-card: 0 1px 2px rgba(30, 41, 59, 0.04), 0 2px 6px rgba(30, 41, 59, 0.06);
+}
+
+/* ---------- Vant 主题变量覆盖 ---------- */
+:root {
+  --van-primary-color: var(--brand-primary);
+  --van-danger-color: var(--danger);
+  --van-success-color: var(--success);
+  --van-warning-color: var(--warning);
+  --van-text-color: var(--text-primary);
+  --van-text-color-2: var(--text-secondary);
+  --van-text-color-3: var(--text-tertiary);
+  --van-background: var(--bg-page);
+  --van-background-2: var(--bg-card);
+  --van-border-color: var(--border-color);
+}

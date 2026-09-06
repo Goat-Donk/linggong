@@ -59,7 +59,7 @@
             <van-image v-if="e.fromIcon" round width="28" height="28" :src="e.fromIcon" />
             <van-icon v-else name="contact" size="28" color="#c8c9cc" />
             <span class="eval-item__name">{{ e.fromNickName }}</span>
-            <van-rate :model-value="e.rating" readonly :size="14" color="#ff976a" />
+            <van-rate :model-value="e.rating" readonly :size="14" />
             <span class="eval-item__to">评 {{ e.toNickName }}</span>
           </div>
           <p v-if="e.content" class="eval-item__content">{{ e.content }}</p>
@@ -87,7 +87,7 @@
       <div class="eval-form">
         <h4 class="eval-form__title">{{ evalTargetName }}</h4>
         <div class="eval-form__rate">
-          <van-rate v-model="evalForm.rating" :count="5" :size="28" color="#ff976a" />
+          <van-rate v-model="evalForm.rating" :count="5" :size="28" />
         </div>
         <van-field
           v-model="evalForm.content"
@@ -316,8 +316,9 @@ async function submitEval() {
 .head-card {
   margin: 12px;
   padding: 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .head-card__title {
   display: flex;
@@ -328,12 +329,12 @@ async function submitEval() {
 .head-card__name {
   font-size: 18px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .head-card__salary {
   font-size: 18px;
-  font-weight: 600;
-  color: #ee0a24;
+  font-weight: 700;
+  color: var(--danger);
 }
 .head-card__tags {
   display: flex;
@@ -348,8 +349,9 @@ async function submitEval() {
   gap: 12px;
   margin: 12px;
   padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .publisher__meta {
   display: flex;
@@ -358,28 +360,29 @@ async function submitEval() {
 .publisher__name {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .publisher__sub {
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
 }
 .desc {
   margin: 12px;
   padding: 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .desc__title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 .desc__content {
   font-size: 14px;
   line-height: 1.6;
-  color: #646566;
+  color: var(--text-secondary);
   white-space: pre-wrap;
 }
 .apply-bar {
@@ -394,8 +397,9 @@ async function submitEval() {
 .eval-section {
   margin: 12px;
   padding: 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .eval-section__head {
   display: flex;
@@ -406,11 +410,11 @@ async function submitEval() {
 .eval-section__title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .eval-item {
   padding: 12px 0;
-  border-top: 1px solid #f0f1f2;
+  border-top: 1px solid var(--border-color);
 }
 .eval-item:first-of-type {
   border-top: none;
@@ -424,22 +428,22 @@ async function submitEval() {
 .eval-item__name {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .eval-item__to {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .eval-item__content {
   font-size: 14px;
   line-height: 1.6;
-  color: #646566;
+  color: var(--text-secondary);
   margin-top: 8px;
   word-break: break-word;
 }
 .eval-item__time {
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
   margin-top: 6px;
 }
 .eval-form {
@@ -448,7 +452,7 @@ async function submitEval() {
 .eval-form__title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 .eval-form__rate {

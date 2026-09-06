@@ -4,6 +4,7 @@ import router from './router'
 
 import Vant from 'vant'
 import 'vant/lib/index.css'
+import './styles/theme.css'
 
 const app = createApp(App)
 app.use(router)

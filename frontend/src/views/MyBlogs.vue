@@ -77,17 +77,18 @@ async function onLoad() {
 .blog-item {
   margin: 12px 12px 0;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .blog-item__title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .blog-item__content {
   font-size: 15px;
-  color: #323233;
+  color: var(--text-primary);
   line-height: 1.6;
   margin-top: 6px;
   word-break: break-word;
@@ -111,7 +112,7 @@ async function onLoad() {
   justify-content: space-between;
   margin-top: 12px;
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .blog-item__like {
   display: inline-flex;

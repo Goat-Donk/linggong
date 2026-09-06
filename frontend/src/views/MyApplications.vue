@@ -75,8 +75,9 @@ async function onLoad() {
 .app-card {
   margin: 12px 12px 0;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .app-card__head {
   display: flex;
@@ -87,7 +88,7 @@ async function onLoad() {
 .app-card__name {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .app-card__row {
   display: flex;
@@ -95,7 +96,7 @@ async function onLoad() {
   gap: 4px;
   margin-top: 6px;
   font-size: 13px;
-  color: #969799;
+  color: var(--text-secondary);
 }
 .app-card__address {
   flex: 1;
@@ -105,6 +106,6 @@ async function onLoad() {
 }
 .app-card__time {
   margin-left: auto;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
 }
 </style>

@@ -146,10 +146,10 @@ async function onLike(blog) {
   align-items: center;
   gap: 6px;
   padding: 12px 18px;
-  background: #1989fa;
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 24px;
-  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
   z-index: 10;
 }
 .fab__text {
@@ -159,8 +159,9 @@ async function onLike(blog) {
 .blog-card {
   margin: 12px 12px 0;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .blog-card__head {
   display: flex;
@@ -174,22 +175,22 @@ async function onLike(blog) {
 .blog-card__name {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .blog-card__time {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 .blog-card__title {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
   margin-top: 12px;
 }
 .blog-card__content {
   font-size: 15px;
-  color: #323233;
+  color: var(--text-primary);
   line-height: 1.6;
   margin-top: 8px;
   word-break: break-word;

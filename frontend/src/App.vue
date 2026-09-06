@@ -27,7 +27,7 @@ const showTabbar = computed(() => ['/home', '/feed', '/profile'].includes(route.
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
-  background-color: #f7f8fa;
-  color: #323233;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
 }
 </style>

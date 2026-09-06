@@ -104,8 +104,9 @@ async function onReject(app) {
 .app-card {
   margin: 12px 12px 0;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .app-card__head {
   display: flex;
@@ -121,11 +122,11 @@ async function onReject(app) {
 .app-card__name {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .app-card__job {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 .app-card__foot {
@@ -136,7 +137,7 @@ async function onReject(app) {
 }
 .app-card__time {
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
 }
 .app-card__actions {
   display: flex;

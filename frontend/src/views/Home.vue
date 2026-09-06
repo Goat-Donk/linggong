@@ -7,6 +7,14 @@
       </template>
     </van-nav-bar>
 
+    <!-- 首页 hero：品牌区，让首页有「脸」 -->
+    <div class="hero">
+      <div class="hero__text">
+        <h2 class="hero__title">找个零工，就在附近</h2>
+        <p class="hero__sub">真实岗位 · 工资日结 · 快速上手</p>
+      </div>
+    </div>
+
     <!-- 附近模式开关 -->
     <div class="nearby-bar">
       <span class="nearby-bar__label">
@@ -180,26 +188,45 @@ async function onLoad() {
 .nav-icon {
   margin-right: 16px;
 }
+.hero {
+  margin: 0 12px 12px;
+  padding: 22px 18px;
+  border-radius: var(--radius-card);
+  background: linear-gradient(135deg, var(--brand-primary-light), var(--brand-primary));
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+.hero__title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.hero__sub {
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.85;
+}
 .nearby-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f0f1f2;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
 }
 .nearby-bar__label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 14px;
-  color: #646566;
+  color: var(--text-secondary);
 }
 .job-card {
   margin: 12px 12px 0;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .job-card__head {
   display: flex;
@@ -210,12 +237,12 @@ async function onLoad() {
 .job-card__name {
   font-size: 16px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .job-card__salary {
   font-size: 16px;
-  font-weight: 600;
-  color: #ee0a24;
+  font-weight: 700;
+  color: var(--danger);
 }
 .job-card__row {
   display: flex;
@@ -223,7 +250,7 @@ async function onLoad() {
   gap: 4px;
   margin-top: 6px;
   font-size: 13px;
-  color: #969799;
+  color: var(--text-secondary);
 }
 .job-card__address {
   flex: 1;
@@ -232,7 +259,7 @@ async function onLoad() {
   white-space: nowrap;
 }
 .job-card__distance {
-  color: #1989fa;
+  color: var(--brand-primary);
 }
 .job-card__time {
   margin-left: auto;
@@ -245,10 +272,10 @@ async function onLoad() {
   align-items: center;
   gap: 6px;
   padding: 12px 18px;
-  background: #1989fa;
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 24px;
-  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
   z-index: 10;
 }
 .fab__text {

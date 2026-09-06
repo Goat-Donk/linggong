@@ -13,7 +13,12 @@
       <van-icon v-else name="contact" size="60" color="#c8c9cc" />
       <div class="meta">
         <p class="nick">{{ userState.info?.nickName || '未命名' }}</p>
-        <van-tag :type="userState.info?.role === 1 ? 'primary' : 'success'" round>
+        <van-tag
+          :type="userState.info?.role === 1 ? 'primary' : 'success'"
+          round
+          color="rgba(255,255,255,0.22)"
+          text-color="#ffffff"
+        >
           {{ userState.info?.role === 1 ? '雇主' : '打工人' }}
         </van-tag>
       </div>
@@ -153,25 +158,27 @@ async function onLogout() {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 16px;
-  padding: 20px 16px;
-  background: #fff;
-  border-radius: 8px;
+  margin: 12px;
+  padding: 24px 18px;
+  background: linear-gradient(135deg, var(--brand-primary-light), var(--brand-primary));
+  border-radius: var(--radius-card);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 .nick {
-  font-size: 17px;
-  font-weight: 600;
-  color: #323233;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
   margin-bottom: 6px;
 }
 .sign-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 16px;
+  margin: 12px;
   padding: 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .sign-card__info {
   display: flex;
@@ -181,11 +188,11 @@ async function onLogout() {
 .sign-card__title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .sign-card__sub {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-top: 4px;
 }
 .placeholder {

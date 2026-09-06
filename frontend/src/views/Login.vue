@@ -1,7 +1,7 @@
 <template>
   <div class="login">
     <div class="brand">
-      <div class="logo"><van-icon name="fire-o" size="40" color="#ee0a24" /></div>
+      <div class="logo"><van-icon name="fire-o" size="40" color="#ffffff" /></div>
       <h1>本地零工平台</h1>
       <p class="slogan">接零工 · 找活干 · 就在指尖</p>
     </div>
@@ -134,18 +134,19 @@ onUnmounted(() => {
   width: 72px;
   height: 72px;
   border-radius: 20px;
-  background: #fff0f0;
+  background: linear-gradient(135deg, var(--brand-primary-light), var(--brand-primary));
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
   margin-bottom: 16px;
 }
 .brand h1 {
   font-size: 22px;
-  font-weight: 600;
-  color: #323233;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 .slogan {
   margin-top: 8px;
   font-size: 13px;
-  color: #969799;
+  color: var(--text-secondary);
 }
 .submit {
   margin: 24px 16px 0;
@@ -154,6 +155,6 @@ onUnmounted(() => {
   margin-top: 16px;
   text-align: center;
   font-size: 12px;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
 }
 </style>
