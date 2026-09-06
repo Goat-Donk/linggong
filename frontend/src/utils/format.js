@@ -42,3 +42,19 @@ export function formatDateTime(s) {
   if (!s) return ''
   return String(s).replace('T', ' ').slice(0, 16)
 }
+
+// 相对时间 "2026-09-06T10:00:00" → 刚刚 / 3分钟前 / 2小时前 / 3天前（超 30 天回落绝对时间）
+export function formatRelativeTime(s) {
+  if (!s) return ''
+  const time = new Date(String(s).replace(' ', 'T')).getTime()
+  if (Number.isNaN(time)) return ''
+  const diff = Date.now() - time
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (diff < minute) return '刚刚'
+  if (diff < hour) return `${Math.floor(diff / minute)}分钟前`
+  if (diff < day) return `${Math.floor(diff / hour)}小时前`
+  if (diff < 30 * day) return `${Math.floor(diff / day)}天前`
+  return formatDateTime(s)
+}

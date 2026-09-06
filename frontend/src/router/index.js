@@ -29,6 +29,12 @@ const routes = [
     meta: { title: '岗位详情' }
   },
   {
+    path: '/feed',
+    name: 'feed',
+    component: () => import('@/views/Feed.vue'),
+    meta: { title: '动态', requiresAuth: true }
+  },
+  {
     path: '/publish',
     name: 'publish',
     component: () => import('@/views/PublishJob.vue'),

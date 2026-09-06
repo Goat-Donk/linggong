@@ -26,3 +26,13 @@ export function getUserById(id) {
 export function logout() {
   return request.post('/user/logout')
 }
+
+// 每日签到（Bitmap，幂等），返回空
+export function sign() {
+  return request.post('/user/sign')
+}
+
+// 本月连续签到天数（0 表示今天尚未签到），data 为数字
+export function signCount() {
+  return request.get('/user/sign/count')
+}

@@ -2,6 +2,7 @@
   <div class="home">
     <van-nav-bar title="本地零工平台">
       <template #right>
+        <van-icon name="fire-o" size="20" class="nav-icon" @click="$router.push('/feed')" />
         <van-icon name="user-o" size="20" @click="$router.push('/profile')" />
       </template>
     </van-nav-bar>
@@ -175,6 +176,9 @@ async function onLoad() {
 <style scoped>
 .home {
   padding-bottom: 80px;
+}
+.nav-icon {
+  margin-right: 16px;
 }
 .nearby-bar {
   display: flex;

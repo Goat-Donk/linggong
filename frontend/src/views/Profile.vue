@@ -19,7 +19,33 @@
       </div>
     </div>
 
+    <!-- 每日签到 -->
+    <div class="sign-card">
+      <div class="sign-card__info">
+        <van-icon name="award-o" size="28" color="#ff976a" />
+        <div>
+          <p class="sign-card__title">{{ signInfo.signed ? `已连续签到 ${signInfo.count} 天` : '每日签到' }}</p>
+          <p class="sign-card__sub">{{ signInfo.signed ? '坚持打卡，好习惯' : '今天还没签到，快来打卡' }}</p>
+        </div>
+      </div>
+      <van-button
+        size="small"
+        round
+        :type="signInfo.signed ? 'default' : 'primary'"
+        :disabled="signInfo.signed"
+        @click="onSign"
+      >
+        {{ signInfo.signed ? '已签到' : '立即签到' }}
+      </van-button>
+    </div>
+
     <van-cell-group inset class="menu">
+      <van-cell
+        title="动态"
+        icon="fire-o"
+        is-link
+        @click="$router.push('/feed')"
+      />
       <van-cell
         v-if="userState.info?.role === 1"
         title="发布岗位"
@@ -43,7 +69,7 @@
     </van-cell-group>
 
     <div class="placeholder">
-      <p class="sub">Step 6/7 实现：我的动态 · 关注 · 签到 · 资料编辑 · 互评</p>
+      <p class="sub">Step 7 实现：晒单动态 · 资料编辑 · 互评</p>
     </div>
 
     <div class="logout">
@@ -53,12 +79,40 @@
 </template>
 
 <script setup>
+import { reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { logout as apiLogout } from '@/api/user'
+import { logout as apiLogout, sign, signCount } from '@/api/user'
 import { clearUser, userState } from '@/stores/user'
 
 const router = useRouter()
+
+// 签到状态：signed 通过「连续签到天数 > 0」推导（后端从今天往前数连续位，>0 即今天已签）
+const signInfo = reactive({ signed: false, count: 0 })
+
+onMounted(loadSignCount)
+
+async function loadSignCount() {
+  try {
+    const res = await signCount()
+    const count = res.data || 0
+    signInfo.count = count
+    signInfo.signed = count > 0
+  } catch (e) {
+    // 失败提示已由 request.js Toast
+  }
+}
+
+async function onSign() {
+  if (signInfo.signed) return
+  try {
+    await sign()
+    showToast('签到成功')
+    await loadSignCount()
+  } catch (e) {
+    // 失败提示已由 request.js Toast
+  }
+}
 
 // 退出登录：先调后端删 token，再清本地状态，跳回登录页
 async function onLogout() {
@@ -88,6 +142,30 @@ async function onLogout() {
   font-weight: 600;
   color: #323233;
   margin-bottom: 6px;
+}
+.sign-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+}
+.sign-card__info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sign-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323233;
+}
+.sign-card__sub {
+  font-size: 12px;
+  color: #969799;
+  margin-top: 4px;
 }
 .placeholder {
   padding: 40px 24px;
