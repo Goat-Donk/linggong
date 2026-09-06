@@ -262,11 +262,13 @@ d:\linggong\
 
 - Phase 6 第 7 步：互评 + 个人中心/上传 —— 后端 `LoginInterceptor` 放行 GET `/evaluation`（匿名浏览岗位时也能看评价，与匿名逛岗位一致，原实现会 401 跳登录）；前端 `vite.config.js` 补 `/uploads` 代理（上传后的图片 `/uploads/{文件名}` 在 dev 下可直接显示）；新增 `api/upload.js`（uploadImage multipart POST /upload/image）、`api/evaluation.js`（getEvaluationsByJob + publishEvaluation）、`api/blog.js` 补 publishBlog/getMyBlogs、`api/user.js` 补 updateProfile/getUserInfo；新增 `PublishBlog.vue`（标题+内容+van-uploader 九宫格多图，选图即传回填 item.url，提交前拦截「上传中」防丢图，images 逗号拼接）、`EditProfile.vue`（头像单图上传 + 昵称/性别/年龄/简介，昵称头像从登录态取、简介年龄性别从资料表取，保存后 getMe 刷新本地登录态）、`MyBlogs.vue`（我的动态 van-list 分页）；`JobDetail.vue` 加互评区（评价列表 + 雇主「评价工人」弹选人 action-sheet / 已报名工人「评价雇主」弹 van-rate + 文本，evalAction 按身份推导，匿名不显示）、`Profile.vue` 加发布动态/我的动态/编辑资料入口 + Step 8 占位、`Feed.vue` 加「发布」悬浮按钮，router 加 /publish-blog、/my-blogs、/edit-profile。经后端 E2E 12 项全通过：匿名 GET /evaluation 200 → 上传图片返回 /uploads/xxx 且匿名可访问 → 发布带图动态成功 → 改资料（昵称张三+头像）/user/me 与 /user/info 同步更新 → 工人评雇主成功 → 重复评价拦截「您已评价过该岗位」→ 雇主评工人成功（选工人数据源 /job-application/employer 按 jobId 过滤正确）→ 评自己拦截「不能评价自己」→ 评价列表计数正确。
 
+- Phase 6 第 8 步：全链路联调验证 —— 逐接口核对前后端字段契约（27 个前端 API 调用 vs 8 个 Controller + 全部 DTO 字段，含雪花 ID 字符串化、datetime ISO、ScrollResult 游标、total 分页、UserDTO/JobDTO/BlogDTO/EvaluationDTO/报名 DTO 字段名逐一比对），发现并修复 1 个真实缺陷：`LoginInterceptor` 用 `startsWith("/job")` 前缀过宽，误放行 `/job-application/*`（我的报名/雇主审核），匿名访问在 `UserHolder.getUser().getId()` 处 NPE 返回 500 而非 401；已收紧为 `startsWith("/job/")`（带斜杠边界）+ 显式放行 `/job-category`。重建后端后三阶段全链路 E2E 全通过：① 匿名浏览（分类/岗位详情/评价 200，报名查询正确 401）② 打工人 11 项（报名雪花单号字符串、我的报名字段、上传、发布带图动态、我的动态、关注、关注流游标、点赞、签到、改资料、评雇主）③ 雇主 4 项（看报名 workerName 来自 DB、通过、重复审核拦截、评工人 + 评价列表 2 条）。**Phase 6 前端联调验证完成。**
+
 ### 🔄 进行中
-- Phase 6 前端（Step 7 互评 + 个人中心/上传 全部完成）。
+- Phase 6 前端（Step 8 全链路联调验证 完成）。
 
 ### ⏭ 下一步
-- Phase 6 Step 8：全链路联调验证（前端页面 + 后端接口整体走查，核对前后端字段契约与边界）。
+- Phase 6 Step 9：`vite build` 生产构建 + nginx 托管前端静态文件 + 反代 `/api`、`/uploads` 到后端（部署收尾）。
 
 ---
 
