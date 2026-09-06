@@ -244,12 +244,13 @@ d:\linggong\
 
 - Phase 5 第 4 步：启动验证通过 —— 端到端 19 项全通过：登录/设角色 → 发布岗位 → 报名（MQ 异步落单）→ 雇主审核 → 互评（工人评雇主 + 雇主评工人 + 评价列表 2 条 + 评自己/重复评价/未报名第三方/评分越界 4 个边界全拦截）→ 文件上传（成功 + 非法类型/空文件拦截 + 匿名访问图片）→ 文档（/doc.html /v3/api-docs /swagger-config 全 200）。修复 1 处缺陷：`LoginInterceptor` 未放行 `/uploads/**` 导致上传图片匿名访问 401，已补放行。**Phase 5 完成。**
 
+- diff 对齐（补缺）：对照本地黑马点评参考后端逐文件 diff，补两处缺口 —— ① 登录用户存储 JSON→Redis Hash（`UserServiceImpl` login/refreshUserCache 用 `opsForHash().putAll` 写、`RefreshTokenInterceptor` 用 `entries`+`fillBeanWithMap` 读、token TTL 加随机值）；② 补 `ILock`+`SimpleRedisLock` 教学版分布式锁（SET NX EX 加锁 + 判断线程标识释放，注释说明演化线到 Redisson）。编译 + 端到端登录验证通过（token 存成 hash、/user/me 正确转回 id/role）。**diff 对齐完成。**
+
 ### 🔄 进行中
-- Phase 5 全部完成，待把 `feat/review-upload` 合回 `main` 并推远程、删本地分支。
+- 无（Phase 0~5 已全部合入 `main` 并推远程）。
 
 ### ⏭ 下一步
-- 收尾：`git checkout main` → `git merge --no-ff feat/review-upload` → `git push` → 删本地分支 → 更新记忆 `linggong-project.md`。
-- 之后进入 Phase 6 前端（移动端 H5）。
+- 进入 Phase 6 前端（移动端 H5，Vue，自己写不复用黑马点评）。
 
 ---
 
