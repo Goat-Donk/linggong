@@ -4,6 +4,8 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -28,12 +30,15 @@ import java.util.function.Function;
 public class CacheClient {
 
     private final StringRedisTemplate stringRedisTemplate;
+    /** Redisson 客户端：缓存击穿互斥锁用生产级 RLock（可重入 + watchdog 自动续期） */
+    private final RedissonClient redissonClient;
 
     /** 逻辑过期异步重建线程池（教学项目，生命周期随 JVM，未做优雅关闭） */
     private final ExecutorService rebuildExecutor = Executors.newFixedThreadPool(10);
 
-    public CacheClient(StringRedisTemplate stringRedisTemplate) {
+    public CacheClient(StringRedisTemplate stringRedisTemplate, RedissonClient redissonClient) {
         this.stringRedisTemplate = stringRedisTemplate;
+        this.redissonClient = redissonClient;
     }
 
     /**
@@ -159,9 +164,10 @@ public class CacheClient {
         if (json != null) {
             return null;
         }
-        // 2. 加互斥锁，防击穿
+        // 2. 加 Redisson 分布式锁防击穿（生产级：可重入 + watchdog 自动续期，业务重建超时锁不会误删）
         String lockKey = RedisConstants.LOCK_KEY_PREFIX + key;
-        if (!tryLock(lockKey)) {
+        RLock lock = redissonClient.getLock(lockKey);
+        if (!lock.tryLock()) {
             // 没抢到锁：稍等后重试（注意此时不释放锁——锁不是自己的）
             try {
                 Thread.sleep(50);
@@ -191,12 +197,14 @@ public class CacheClient {
             this.set(key, r, time, unit);
             return r;
         } finally {
-            unlock(lockKey);
+            lock.unlock();
         }
     }
 
     /**
      * 抢互斥锁：SET NX EX 原子操作，只有一个线程能抢到。
+     * <p>仅 {@link #queryWithLogicalExpire} 使用：逻辑过期是「主线程抢锁 + 异步线程释放」，
+     * 而 RLock 要求 lock/unlock 在同一线程，故此处保留自研锁，不在本次换成 RLock。
      */
     private boolean tryLock(String key) {
         Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(

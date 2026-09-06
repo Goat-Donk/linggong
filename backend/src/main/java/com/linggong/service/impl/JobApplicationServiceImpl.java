@@ -20,6 +20,8 @@ import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RedisIdWorker;
 import com.linggong.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -53,16 +55,19 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final RedisIdWorker redisIdWorker;
     private final RabbitTemplate rabbitTemplate;
     private final DefaultRedisScript<Long> seckillScript;
+    private final RedissonClient redissonClient;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
-                                     RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript) {
+                                     RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
+                                     RedissonClient redissonClient) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.redisIdWorker = redisIdWorker;
         this.rabbitTemplate = rabbitTemplate;
         this.seckillScript = seckillScript;
+        this.redissonClient = redissonClient;
     }
 
     @Override
@@ -197,23 +202,33 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     @Override
     public Result audit(Long applicationId, boolean approve) {
         Long employerId = UserHolder.getUser().getId();
-        // 1. 报名记录存在且处于「待确认」状态
-        JobApplication application = getById(applicationId);
-        if (application == null) {
-            return Result.fail("报名记录不存在");
+        // 分布式锁：锁定单条报名记录，把「读 → 判断 → 更新」整体包进锁内，
+        // 防止并发重复审核（对标黑马点评「一人一单」的业务锁：key 设计 + 粒度 + 加锁位置）。
+        RLock lock = redissonClient.getLock(RedisConstants.AUDIT_LOCK_KEY + applicationId);
+        if (!lock.tryLock()) {
+            return Result.fail("操作过于频繁，请稍后再试");
         }
-        if (application.getStatus() == null || application.getStatus() != 0) {
-            return Result.fail("该报名已处理，不能重复审核");
+        try {
+            // 1. 报名记录存在且处于「待确认」状态
+            JobApplication application = getById(applicationId);
+            if (application == null) {
+                return Result.fail("报名记录不存在");
+            }
+            if (application.getStatus() == null || application.getStatus() != 0) {
+                return Result.fail("该报名已处理，不能重复审核");
+            }
+            // 2. 归属校验：只能审核自己发布岗位下的报名
+            Job job = jobMapper.selectById(application.getJobId());
+            if (job == null || !job.getEmployerId().equals(employerId)) {
+                return Result.fail("只能审核自己发布岗位的报名");
+            }
+            // 3. 状态流转：通过 → 已录用(1)，拒绝 → 已取消(3)
+            application.setStatus(approve ? 1 : 3);
+            updateById(application);
+            return Result.ok();
+        } finally {
+            lock.unlock();
         }
-        // 2. 归属校验：只能审核自己发布岗位下的报名
-        Job job = jobMapper.selectById(application.getJobId());
-        if (job == null || !job.getEmployerId().equals(employerId)) {
-            return Result.fail("只能审核自己发布岗位的报名");
-        }
-        // 3. 状态流转：通过 → 已录用(1)，拒绝 → 已取消(3)
-        application.setStatus(approve ? 1 : 3);
-        updateById(application);
-        return Result.ok();
     }
 
     /**
