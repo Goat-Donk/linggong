@@ -266,6 +266,8 @@ d:\linggong\
 
 - Phase 6 第 9 步：生产构建 + nginx 部署 —— `npm run build` 产出 `frontend/dist`（hash 指纹 + gzip，约 3.9s；dist 由 frontend/.gitignore 忽略不入库）；新增 `deploy/`（`nginx.conf` 生产配置 + `README.md` 部署说明）；安装真实 nginx：从 nginx.org 下载官方 Windows 便携版 1.26.2，解压到 `tools/nginx-1.26.2/`（无需管理员/无需装服务，`tools/` 已加入 .gitignore 不入库），配置监听 8088（本机 80 被系统进程 PID4 占用），`nginx -t` 校验通过并启动（master/worker 双进程）。真实 nginx 部署 8 项验证全通过：根路径 `/`、深链 `/job/8` `/feed` 均回退 index.html、静态资源 JS、反代 GET `/api`、POST `/api/user/code`（方法+query 透传）、`/uploads` 图片 image/png、分类列表经反代返回真实数据。**Phase 6 前端全部完成，项目收尾。**
 - Phase 6 收尾：`feat/frontend`（Phase 6 全部 19 个提交）以 `--no-ff` 合回 `main`（合并提交 `merge: Phase 6 前端（Vue3+Vite+Vant4）合回 main`），`main` 已推送远端，本地 + 远端 `feat/frontend` 分支均已删除。**项目整体完成。**
+- 技术缺口补齐（Redisson RLock）：审查发现 `RedissonClient` 只被布隆过滤器使用、`RLock` 从未接入。补齐两处 —— ① `CacheClient.queryWithMutex` 缓存击穿互斥锁由自研 setnx 换成 `RLock`（可重入 + watchdog 自动续期，修复「unlock 直接 delete 可能误删」缺陷）；② `audit` 审核加业务锁 `RLock`（对标黑马「一人一单」，防并发重复审核，锁粒度=单条报名记录）。`queryWithLogicalExpire` 因「主线程抢锁+异步释放」保留自研锁（RLock 要求同线程）。编译 + 启动 + 岗位详情 + audit 锁路径验证通过。
+- 技术缺口补齐（RabbitMQ 发布确认）：审查发现报名 `convertAndSend` 是 fire-and-forget、无 confirm/return，消息投递失败会「静默丢消息」（名额泄漏 + 用户卡死）。补齐 —— ① `application.yml` 启用 `publisher-confirm-type: correlated` + `publisher-returns`；② `RabbitConfig` 定义 `RabbitTemplate` bean（setMandatory + confirm 回调记 orderId + return 回调 NO_ROUTE 告警）；③ `apply()` 携带 `CorrelationData(orderId)`。异常演练验证：错误路由 key 触发 return 回调 `replyCode=312 NO_ROUTE` + 完整消息体。
 
 ### 🔄 进行中
 - 无（Phase 0–6 全部完成）。
