@@ -17,7 +17,7 @@
 | 角色 | 打工人（求职者）、雇主（发布者）。一个用户可兼任两种身份 |
 | 包名 | `com.linggong` |
 | 后端 ArtifactId | `linggong-backend` |
-| 前端 | 后期再做（移动端 H5，与黑马点评类似风格，但不复用其代码） |
+| 前端 | 移动端 H5（Vue3 + Vite + Vant4，自己写不复用黑马点评） |
 | 是否追性能指标 | 否，重点是学技术、写规范，不追求 QPS/压测 |
 
 ### 目录结构
@@ -32,7 +32,7 @@ d:\linggong\
 │       ├── controller/  service/(impl)  mapper/  entity/  dto/
 │       ├── config/      interceptor/    utils/
 │       └── resources/(application.yml, logback.xml, mapper/*.xml, lua/*.lua, db.sql)
-└── frontend/            # 前端（后期，移动端 H5）
+└── frontend/            # 前端（移动端 H5，Vue3 + Vite + Vant4）
 ```
 
 ### 环境要求
@@ -168,7 +168,7 @@ d:\linggong\
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ✅ 完成 |
-| **Phase 6 前端（后期）** | 移动端 H5，连后端 | Vue | ⬜ 未开始 |
+| **Phase 6 前端** | 移动端 H5，连后端 | Vue3 + Vite + Vant4 | ✅ 完成 |
 
 ---
 
@@ -248,11 +248,29 @@ d:\linggong\
 
 - diff 对齐（三方比对，SimpleRedisLock 补原子释放）：拿到真·原版 `F:\BaiduNetdiskDownload\hm-dianping` 后三方比对，确认 CacheClient / UserHolder / 登录 Hash 本就贴合原版；唯一偏离是 SimpleRedisLock 照抄了增强版「非原子 check-then-delete」的写法，已改回原版 `lua/unlock.lua` 原子释放（DefaultRedisScript 执行 get+compare+del 一步原子）。编译通过，`unlock.lua` 逻辑验证通过（标识一致删除、不一致不删）。**三方对齐完成。**
 
+- Phase 6 第 1 步：前端初始化 —— 手写 Vite + Vue3 脚手架（`frontend/`，不用 `npm create vite` 的示例模板）：`package.json` 锁定 vue@3.5 / vue-router@4.6 / axios@1.20 / vant@4.10 / vite@6.4；`vite.config.js` 配 `/api` 代理到后端 8080（`rewrite` 去前缀，开发期免 CORS）；`main.js` 全量引入 Vant + router；`App.vue` 全局基础样式（移动端 viewport + reset）；`router/index.js` 建 home/login 占位路由 + 标题联动；`utils/request.js` 封装 axios（authorization 头放裸 token 无 Bearer 前缀、响应拦截统一处理 Result、401 清 token 跳登录）；`views/Home.vue`/`Login.vue` 占位页。`npm run build` 通过（302 模块，5.3s）。
+
+- Phase 6 第 2 步：登录 + 鉴权 —— 新增 `stores/user.js`（reactive 单例 + localStorage 存 token/info，不引 Pinia，状态复杂再上）、`api/user.js`（sendCode/login/getMe/logout，对齐后端 UserController）；重写 `Login.vue`（手机号+验证码登录：60s 倒计时防重发、van-form 校验、登录成功先存 token 再拉 `/user/me` 存用户信息、跳回 `redirect` 来源页）；`router` 加 `beforeEach` 鉴权守卫（`requiresAuth` 无 token 跳登录并带 redirect）；`Home.vue` 展示登录态（昵称+角色 tag）；新增受保护占位页 `Profile.vue`（用户卡片 + 退出登录）。经 Vite 代理实测端到端：发码 → 登录拿 token → `/user/me` 返回 `{id:1,nickName:"老李",icon:"",role:1}` 全通，无 token 返回 401。
+
+- Phase 6 第 3 步：首页（岗位列表 + 分类 + 附近搜索）—— 新增 `api/category.js`（getCategories）、`api/job.js`（getJobsByCategory/getNearbyJobs）、`utils/format.js`（距离/薪资/日期格式化）、`views/JobDetail.vue`（占位，Step 4 补）；重写 `Home.vue`（分类 Tab + 「只看附近」开关 + van-list 无限滚动岗位卡片）：分类 Tab 用 `v-model:active` 绑分类 id、附近模式用浏览器 `navigator.geolocation` 先定位成功再切换、筛选变化用 `:key` 重挂载 van-list 触发重新加载、`requestSeq` 序号丢弃在途旧请求防串数据、空状态 van-empty；`router` 加 `/job/:id` 占位路由。经代理实测：分类列表 6 个、按分类分页 total=4、附近搜索（上海坐标）返回 2 个岗位 `distance:0.19m`、偏移坐标超 5km 半径返回空（GEO 半径生效）。修复 1 处缺陷：附近搜索后端不返回 total，分页判断改为「不满一页 或 有 total 且已累计到 total」双条件，避免首页就误判到底。
+
+- Phase 6 第 4 步：岗位详情 + 报名 —— 新增 `api/application.js`（applyJob）、`api/job.js` 补 getJobById、`api/user.js` 补 getUserById；重写 `JobDetail.vue`（岗位信息卡 + 地址/时间/名额 + 发布者卡 + 岗位描述 + 底部固定报名按钮）：发布者信息需登录（`/user/{id}` 不在 LoginInterceptor 放行列表），匿名跳过不影响浏览；报名按钮按「已下架/自己发布/已报名/立即报名」动态禁用与文案；点击报名未登录先跳登录带 redirect，登录后 POST `/job-application/{id}`；成功 toast + 按钮变已报名，失败由 request.js Toast（名额满/重复报名/报自己岗位）。经代理实测：详情返回完整 JobDTO（distance=null）、新工人报名成功返回雪花单号、重复报名拦截、匿名报名 401。**注**：后端最终实现无「普通岗/限量岗」分流，所有报名统一走 Lua 秒杀 + MQ 落单，前端无需区分。
+
+- Phase 6 第 5 步：发布岗位 + 我的报名 —— 新增 `api/job.js` publishJob、`api/application.js` getMyApplications、`utils/format.js` formatApplyStatus/applyStatusType/formatDateTime；新增 `PublishJob.vue`（雇主表单：分类选择器/名称/地址/浏览器定位取经纬度 x/y/薪资/名额 stepper/起止时间 datetime picker 输出 ISO-8601/描述，非雇主 van-empty 拦截）、`MyApplications.vue`（我的报名分页列表，状态机 0待确认/1录用/2完成/3取消 + 岗位/薪资/地址/报名时间）；入口：首页雇主悬浮「发布」按钮 + 个人中心菜单（发布岗位/我的报名）；router 加 /publish、/my-applications。经后端 E2E 实测：雇主发布返回岗位 id 7、工人发布被拒「只有雇主才能发布岗位」、报名后我的报名返回完整 DTO（jobName/status=0待确认/total=1）。**补完雇主审核**：后端补 `GET /job-application/employer`（雇主查我发布岗位下的报名，含报名人昵称头像）+ 新 `EmployerApplicationDTO`；前端补 `EmployerApplications.vue`（通过/拒绝按钮，仅待确认显示操作，审核后本地更新状态）+ api approve/reject + 路由 + 个人中心「审核报名」入口。**重要修复**：雪花单号 64 位超 JS 安全整数 2^53，数字传输精度丢失导致审核拿错 id（实测 `...639` 变 `...600`）——已给 `JobApplicationDTO`/`EmployerApplicationDTO` 的 id 加 `@JsonSerialize(ToStringSerializer)` 序列化为字符串、apply 返回单号也转字符串。全项目雪花 ID 仅此两处（Blog/User/Job 均为自增），修复闭环。经后端 E2E：列表返回 string id + workerName、拒绝 0→3、通过 0→1、重复审核拦截「该报名已处理」、apply 返回 string 单号，全通过。
+
+- Phase 6 第 6 步：关注 + Feed + 点赞 + 签到 —— 后端 `BlogDTO` 补 `isFollow`（与 `isLike` 对称：取关后旧动态仍留在收件箱，关注状态必须由后端返回，不能前端推断），`BlogServiceImpl.queryBlogOfFollow` 批量填充 `isFollow`（读 Redis follows 集合）；前端新增 `api/blog.js`（queryBlogOfFollow 滚动分页 + likeBlog）、`api/follow.js`（follow 关注/取关）、`api/user.js` 补 sign/signCount、`utils/format.js` 加 formatRelativeTime；新增 `Feed.vue`（关注流 van-list 无限滚动 lastId+offset 游标 + 点赞/关注/取关本地即时更新 + 相对时间 + 图片九宫格 + 空状态），`Profile.vue` 加「每日签到」卡片（用 signCount>0 推导今天已签，无需额外接口）+ 动态入口，`Home.vue` 导航加动态入口，router 加 /feed。经后端 E2E 10 项全通过：发布动态 3 条 → 关注两人 → 关注流时间倒序含 isFollow=true 与作者真实昵称 → 滚动分页游标 minTime/offset 正确、第二页为空 → isFollow 校验 true/false → 点赞 liked 0→1→0 与 isLike 切换 → 取关 isFollow→false → 签到幂等 signCount=1 → 未签到用户 signCount=0。**注**：晒单「发布 UI」留到 Step 7（需文件上传），本步 Feed 用接口发布种子数据联调。
+
+- Phase 6 第 7 步：互评 + 个人中心/上传 —— 后端 `LoginInterceptor` 放行 GET `/evaluation`（匿名浏览岗位时也能看评价，与匿名逛岗位一致，原实现会 401 跳登录）；前端 `vite.config.js` 补 `/uploads` 代理（上传后的图片 `/uploads/{文件名}` 在 dev 下可直接显示）；新增 `api/upload.js`（uploadImage multipart POST /upload/image）、`api/evaluation.js`（getEvaluationsByJob + publishEvaluation）、`api/blog.js` 补 publishBlog/getMyBlogs、`api/user.js` 补 updateProfile/getUserInfo；新增 `PublishBlog.vue`（标题+内容+van-uploader 九宫格多图，选图即传回填 item.url，提交前拦截「上传中」防丢图，images 逗号拼接）、`EditProfile.vue`（头像单图上传 + 昵称/性别/年龄/简介，昵称头像从登录态取、简介年龄性别从资料表取，保存后 getMe 刷新本地登录态）、`MyBlogs.vue`（我的动态 van-list 分页）；`JobDetail.vue` 加互评区（评价列表 + 雇主「评价工人」弹选人 action-sheet / 已报名工人「评价雇主」弹 van-rate + 文本，evalAction 按身份推导，匿名不显示）、`Profile.vue` 加发布动态/我的动态/编辑资料入口 + Step 8 占位、`Feed.vue` 加「发布」悬浮按钮，router 加 /publish-blog、/my-blogs、/edit-profile。经后端 E2E 12 项全通过：匿名 GET /evaluation 200 → 上传图片返回 /uploads/xxx 且匿名可访问 → 发布带图动态成功 → 改资料（昵称张三+头像）/user/me 与 /user/info 同步更新 → 工人评雇主成功 → 重复评价拦截「您已评价过该岗位」→ 雇主评工人成功（选工人数据源 /job-application/employer 按 jobId 过滤正确）→ 评自己拦截「不能评价自己」→ 评价列表计数正确。
+
+- Phase 6 第 8 步：全链路联调验证 —— 逐接口核对前后端字段契约（27 个前端 API 调用 vs 8 个 Controller + 全部 DTO 字段，含雪花 ID 字符串化、datetime ISO、ScrollResult 游标、total 分页、UserDTO/JobDTO/BlogDTO/EvaluationDTO/报名 DTO 字段名逐一比对），发现并修复 1 个真实缺陷：`LoginInterceptor` 用 `startsWith("/job")` 前缀过宽，误放行 `/job-application/*`（我的报名/雇主审核），匿名访问在 `UserHolder.getUser().getId()` 处 NPE 返回 500 而非 401；已收紧为 `startsWith("/job/")`（带斜杠边界）+ 显式放行 `/job-category`。重建后端后三阶段全链路 E2E 全通过：① 匿名浏览（分类/岗位详情/评价 200，报名查询正确 401）② 打工人 11 项（报名雪花单号字符串、我的报名字段、上传、发布带图动态、我的动态、关注、关注流游标、点赞、签到、改资料、评雇主）③ 雇主 4 项（看报名 workerName 来自 DB、通过、重复审核拦截、评工人 + 评价列表 2 条）。**Phase 6 前端联调验证完成。**
+
+- Phase 6 第 9 步：生产构建 + nginx 部署 —— `npm run build` 产出 `frontend/dist`（hash 指纹 + gzip，约 3.9s；dist 由 frontend/.gitignore 忽略不入库）；新增 `deploy/`（`nginx.conf` 生产配置 + `README.md` 部署说明）；安装真实 nginx：从 nginx.org 下载官方 Windows 便携版 1.26.2，解压到 `tools/nginx-1.26.2/`（无需管理员/无需装服务，`tools/` 已加入 .gitignore 不入库），配置监听 8088（本机 80 被系统进程 PID4 占用），`nginx -t` 校验通过并启动（master/worker 双进程）。真实 nginx 部署 8 项验证全通过：根路径 `/`、深链 `/job/8` `/feed` 均回退 index.html、静态资源 JS、反代 GET `/api`、POST `/api/user/code`（方法+query 透传）、`/uploads` 图片 image/png、分类列表经反代返回真实数据。**Phase 6 前端全部完成，项目收尾。**
+
 ### 🔄 进行中
-- 无（Phase 0~5 已全部合入 `main` 并推远程）。
+- 无（Phase 0–6 全部完成）。
 
 ### ⏭ 下一步
-- 进入 Phase 6 前端（移动端 H5，Vue，自己写不复用黑马点评）。
+- 合并 `feat/frontend` → `main` 并删除 feature 分支（Phase 6 完成，项目整体收尾）。
 
 ---
 

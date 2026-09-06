@@ -29,6 +29,9 @@ public class BlogDTO {
     /** 当前登录用户是否已点赞 */
     private Boolean isLike;
 
+    /** 当前登录用户是否已关注发布者 */
+    private Boolean isFollow;
+
     /** 发布者头像 */
     private String icon;
 

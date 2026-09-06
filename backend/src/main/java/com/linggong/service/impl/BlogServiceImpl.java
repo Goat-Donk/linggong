@@ -141,6 +141,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         List<BlogDTO> dtos = ordered.stream().map(blog -> {
             BlogDTO dto = BeanUtil.copyProperties(blog, BlogDTO.class);
             dto.setIsLike(isLiked(blog.getId(), userId));
+            dto.setIsFollow(isFollowed(blog.getUserId(), userId));
             User author = userMap.get(blog.getUserId());
             if (author != null) {
                 dto.setIcon(author.getIcon());
@@ -191,6 +192,15 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     private boolean isLiked(Long blogId, Long userId) {
         Boolean member = stringRedisTemplate.opsForSet().isMember(
                 RedisConstants.BLOG_LIKED_KEY + blogId, userId.toString());
+        return Boolean.TRUE.equals(member);
+    }
+
+    /**
+     * 判断当前用户是否已关注某用户（读 Redis 关注集合，避免查库）。
+     */
+    private boolean isFollowed(Long followUserId, Long userId) {
+        Boolean member = stringRedisTemplate.opsForSet().isMember(
+                RedisConstants.FOLLOWS_KEY + userId, followUserId.toString());
         return Boolean.TRUE.equals(member);
     }
 }

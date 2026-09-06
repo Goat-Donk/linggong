@@ -30,3 +30,6 @@ backend/src/main/resources/static/uploads/
 # ===== 本地敏感配置（如有）=====
 application-local.yml
 *.local.properties
+
+# ===== 本地工具（nginx 便携版等）=====
+tools/

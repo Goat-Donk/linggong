@@ -14,10 +14,14 @@ public class LoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 浏览类 GET 接口放行：未登录也能浏览岗位（对齐黑马点评开放 /shop/** 查询）
         // 以及接口文档（页面 /doc.html、静态资源 /webjars、OpenAPI JSON /v3/api-docs）。
-        // 写操作（POST/PUT/DELETE）不在此列，仍需登录校验
+        // 写操作（POST/PUT/DELETE）不在此列，仍需登录校验。
+        // 注意：/job 用「带斜杠」的 /job/ 判断边界，否则会误放行 /job-application/*（我的报名/雇主审核，
+        // 需登录，匿名访问会在 UserHolder.getUser() 处 NPE）；/job-category 单独显式放行。
         String uri = request.getRequestURI();
         if ("GET".equalsIgnoreCase(request.getMethod())
-                && (uri.startsWith("/job")
+                && (uri.startsWith("/job/")
+                    || uri.startsWith("/job-category")
+                    || uri.startsWith("/evaluation")
                     || uri.startsWith("/doc.html")
                     || uri.startsWith("/v3/api-docs")
                     || uri.startsWith("/webjars")

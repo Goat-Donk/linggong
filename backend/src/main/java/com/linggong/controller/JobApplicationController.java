@@ -31,7 +31,7 @@ public class JobApplicationController {
      * 报名岗位（仅登录用户，走 Lua 秒杀 + MQ 异步落单）。
      *
      * @param jobId 岗位 id
-     * @return 报名结果，成功时 data 为报名单号
+     * @return 报名结果，成功时 data 为报名单号（字符串，雪花 ID 避免 JS 精度丢失）
      */
     @Operation(summary = "报名岗位（Lua 秒杀 + MQ 异步落单）")
     @PostMapping("/{jobId}")
@@ -47,6 +47,16 @@ public class JobApplicationController {
     public Result myApplications(@Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
                                  @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return jobApplicationService.myApplications(page, pageSize);
+    }
+
+    /**
+     * 雇主视角报名列表（我发布岗位下的报名，用于审核）。
+     */
+    @Operation(summary = "雇主视角报名列表（用于审核）")
+    @GetMapping("/employer")
+    public Result employerApplications(@Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
+                                       @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        return jobApplicationService.employerApplications(page, pageSize);
     }
 
     /**
