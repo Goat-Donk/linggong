@@ -25,6 +25,11 @@ public interface IJobApplicationService extends IService<JobApplication> {
     Result myApplications(Integer page, Integer pageSize);
 
     /**
+     * 查询当前雇主发布岗位下的报名记录（分页，含报名人信息），用于雇主审核。
+     */
+    Result employerApplications(Integer page, Integer pageSize);
+
+    /**
      * 雇主审核报名：通过 / 拒绝。
      *
      * @param applicationId 报名记录 id

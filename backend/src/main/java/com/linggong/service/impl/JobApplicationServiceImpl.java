@@ -2,15 +2,19 @@ package com.linggong.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.ApplyMessage;
+import com.linggong.dto.EmployerApplicationDTO;
 import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
+import com.linggong.entity.User;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
+import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobApplicationService;
 import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
@@ -44,15 +48,17 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         implements IJobApplicationService {
 
     private final JobMapper jobMapper;
+    private final UserMapper userMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final RedisIdWorker redisIdWorker;
     private final RabbitTemplate rabbitTemplate;
     private final DefaultRedisScript<Long> seckillScript;
 
-    public JobApplicationServiceImpl(JobMapper jobMapper, StringRedisTemplate stringRedisTemplate,
-                                     RedisIdWorker redisIdWorker, RabbitTemplate rabbitTemplate,
-                                     DefaultRedisScript<Long> seckillScript) {
+    public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
+                                     StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
+                                     RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript) {
         this.jobMapper = jobMapper;
+        this.userMapper = userMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.redisIdWorker = redisIdWorker;
         this.rabbitTemplate = rabbitTemplate;
@@ -102,7 +108,8 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
                 MqConstants.JOB_APPLICATION_KEY,
                 JSONUtil.toJsonStr(message));
 
-        return Result.ok(orderId);
+        // 雪花单号超出 JS 安全整数，转字符串返回，避免前端精度丢失
+        return Result.ok(String.valueOf(orderId));
     }
 
     @Override
@@ -130,6 +137,56 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
                 dto.setJobName(job.getName());
                 dto.setAddress(job.getAddress());
                 dto.setSalary(job.getSalary());
+            }
+            return dto;
+        }).collect(Collectors.toList());
+
+        return Result.ok(dtos, pageResult.getTotal());
+    }
+
+    @Override
+    public Result employerApplications(Integer page, Integer pageSize) {
+        Long employerId = UserHolder.getUser().getId();
+        // 1. 查我发布的岗位，构建 jobName 映射 + jobId 列表
+        List<Job> myJobs = jobMapper.selectList(
+                new LambdaQueryWrapper<Job>().eq(Job::getEmployerId, employerId));
+        if (myJobs.isEmpty()) {
+            return Result.ok(Collections.emptyList(), 0L);
+        }
+        Map<Long, Job> jobMap = myJobs.stream().collect(Collectors.toMap(Job::getId, job -> job));
+        List<Long> jobIds = myJobs.stream().map(Job::getId).collect(Collectors.toList());
+
+        // 2. 分页查这些岗位下的报名（按报名时间倒序）
+        Page<JobApplication> pageResult = lambdaQuery()
+                .in(JobApplication::getJobId, jobIds)
+                .orderByDesc(JobApplication::getCreateTime)
+                .page(new Page<>(page, pageSize));
+
+        // 3. 批量查报名人，避免 N+1
+        List<Long> workerIds = pageResult.getRecords().stream()
+                .map(JobApplication::getWorkerId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, User> userMap = workerIds.isEmpty() ? Collections.emptyMap()
+                : userMapper.selectBatchIds(workerIds).stream()
+                        .collect(Collectors.toMap(User::getId, user -> user));
+
+        // 4. 组装 DTO：报名 + 岗位名 + 报名人昵称头像
+        List<EmployerApplicationDTO> dtos = pageResult.getRecords().stream().map(app -> {
+            EmployerApplicationDTO dto = new EmployerApplicationDTO();
+            dto.setId(app.getId());
+            dto.setJobId(app.getJobId());
+            dto.setWorkerId(app.getWorkerId());
+            dto.setStatus(app.getStatus());
+            dto.setCreateTime(app.getCreateTime());
+            Job job = jobMap.get(app.getJobId());
+            if (job != null) {
+                dto.setJobName(job.getName());
+            }
+            User worker = userMap.get(app.getWorkerId());
+            if (worker != null) {
+                dto.setWorkerName(worker.getNickName());
+                dto.setWorkerIcon(worker.getIcon());
             }
             return dto;
         }).collect(Collectors.toList());
