@@ -264,7 +264,7 @@ d:\linggong\
 
 - Phase 6 第 8 步：全链路联调验证 —— 逐接口核对前后端字段契约（27 个前端 API 调用 vs 8 个 Controller + 全部 DTO 字段，含雪花 ID 字符串化、datetime ISO、ScrollResult 游标、total 分页、UserDTO/JobDTO/BlogDTO/EvaluationDTO/报名 DTO 字段名逐一比对），发现并修复 1 个真实缺陷：`LoginInterceptor` 用 `startsWith("/job")` 前缀过宽，误放行 `/job-application/*`（我的报名/雇主审核），匿名访问在 `UserHolder.getUser().getId()` 处 NPE 返回 500 而非 401；已收紧为 `startsWith("/job/")`（带斜杠边界）+ 显式放行 `/job-category`。重建后端后三阶段全链路 E2E 全通过：① 匿名浏览（分类/岗位详情/评价 200，报名查询正确 401）② 打工人 11 项（报名雪花单号字符串、我的报名字段、上传、发布带图动态、我的动态、关注、关注流游标、点赞、签到、改资料、评雇主）③ 雇主 4 项（看报名 workerName 来自 DB、通过、重复审核拦截、评工人 + 评价列表 2 条）。**Phase 6 前端联调验证完成。**
 
-- Phase 6 第 9 步：生产构建 + 部署收尾 —— `npm run build` 产出 `frontend/dist`（hash 指纹 + gzip，约 3.9s；dist 已由 frontend/.gitignore 忽略不入库）；新增 `deploy/` 目录：`nginx.conf`（生产配置：托管 dist + SPA history 回退 `try_files $uri $uri/ /index.html` + 反代 `/api` 去前缀、`/uploads` 保留路径到 8080 + 静态资源长缓存）、`preview.mjs`（零依赖预览服务器，等价复刻 nginx 行为用于本机验证）、`README.md`（构建/预览/部署说明）。因本机无 nginx 且网络受限（nginx.org 2MB 包 15s 仅下 32KB、GitHub/npm 超时），用 preview.mjs 模拟 nginx 验证生产部署 8 项全通过：根路径 `/`、深链 `/job/8` `/feed` 均回退 index.html、静态资源 JS、反代 GET `/api`、POST `/api/user/code`（方法+query 透传）、`/uploads` 图片 image/png。**Phase 6 前端全部完成，项目收尾。**
+- Phase 6 第 9 步：生产构建 + nginx 部署 —— `npm run build` 产出 `frontend/dist`（hash 指纹 + gzip，约 3.9s；dist 由 frontend/.gitignore 忽略不入库）；新增 `deploy/`（`nginx.conf` 生产配置 + `README.md` 部署说明）；安装真实 nginx：从 nginx.org 下载官方 Windows 便携版 1.26.2，解压到 `tools/nginx-1.26.2/`（无需管理员/无需装服务，`tools/` 已加入 .gitignore 不入库），配置监听 8088（本机 80 被系统进程 PID4 占用），`nginx -t` 校验通过并启动（master/worker 双进程）。真实 nginx 部署 8 项验证全通过：根路径 `/`、深链 `/job/8` `/feed` 均回退 index.html、静态资源 JS、反代 GET `/api`、POST `/api/user/code`（方法+query 透传）、`/uploads` 图片 image/png、分类列表经反代返回真实数据。**Phase 6 前端全部完成，项目收尾。**
 
 ### 🔄 进行中
 - 无（Phase 0–6 全部完成）。
