@@ -21,6 +21,23 @@
 - Lombok、Hutool、Validation
 - 前端（后期）：移动端 H5，与黑马点评类似风格，但自己写不复用
 
+## 参考代码（改动核心类前先看）
+
+本项目骨架对齐「黑马点评」，本地有两份参考源码，**改动前优先对照真·原版**：
+
+| 版本 | 路径 | 说明 |
+| --- | --- | --- |
+| **真·原版** | `F:\BaiduNetdiskDownload\hm-dianping` | 黑马点评官方课程源码（com.hmdp），**对齐基准** |
+| 增强版 | `d:\AI点评\AI-dianping-backend` | 用户自己加料的（CacheClient 合布隆+Guava 本地缓存、有 MCP/Reservation/Chat/AiSkill），**已偏离原版，仅作参考** |
+
+关键差异（linggong 已对齐原版，改代码时别照着增强版改回去）：
+- `CacheClient`：原版三方法拆分（穿透/逻辑过期/互斥）←→ 增强版合并成一个方法 + 布隆 + 本地缓存。
+- `SimpleRedisLock`：原版 `unlock()` 用 `lua/unlock.lua` 原子释放 ←→ 增强版回退成非原子 check-then-delete。
+- `UserHolder`：原版普通 ThreadLocal ←→ 增强版 InheritableThreadLocal。
+- 登录存储：两边都是 Redis Hash（linggong 也用 Hash）。
+
+有意为之的选型差异（不算偏离，别改）：RabbitMQ 替代 Redis Stream（seckill.lua 不 `xadd`）、验证码登录无密码（无 PasswordEncoder）。
+
 ## 目录结构
 
 ```
