@@ -240,7 +240,7 @@ async function onLoad() {
 .fab {
   position: fixed;
   right: 16px;
-  bottom: 40px;
+  bottom: 70px;
   display: flex;
   align-items: center;
   gap: 6px;

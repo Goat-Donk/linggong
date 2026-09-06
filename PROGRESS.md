@@ -270,12 +270,14 @@ d:\linggong\
 - 技术缺口补齐（RabbitMQ 发布确认）：审查发现报名 `convertAndSend` 是 fire-and-forget、无 confirm/return，消息投递失败会「静默丢消息」（名额泄漏 + 用户卡死）。补齐 —— ① `application.yml` 启用 `publisher-confirm-type: correlated` + `publisher-returns`；② `RabbitConfig` 定义 `RabbitTemplate` bean（setMandatory + confirm 回调记 orderId + return 回调 NO_ROUTE 告警）；③ `apply()` 携带 `CorrelationData(orderId)`。异常演练验证：错误路由 key 触发 return 回调 `replyCode=312 NO_ROUTE` + 完整消息体。
 
 - 全面功能验证 + 分类数据修复：对 8 大模块（登录/岗位/报名/关注/Feed/签到/互评/上传 + 接口文档/前端 nginx）端到端验证约 87 项全部通过，核心链路（登录→发岗→Lua 秒杀→MQ 落单→审核→互评）闭环正常。发现并修复 1 个数据 bug：`tb_job_category` 种子数据历史被错误字符集导入导致乱码（双重编码，非代码 bug），已用 pymysql 按 db.sql 种子数据改正 6 条分类名，`/job-category/list` 及 nginx 反代均返回正确中文。
+- 前端体验修复（导航 TabBar）：用户反馈「个人页退不回主页」。根因：前端无底部 TabBar，`Profile` 被当一级页设计却无回首页入口（二级页其实都已带返回箭头）。修复 —— ① `App.vue` 加 `van-tabbar`（首页/动态/我的三 tab，route 模式按当前路径高亮，`showTabbar` 仅 `/home` `/feed` `/profile` 显示，二级页仍用顶栏返回箭头）；② `Feed.vue` 顶栏去掉返回箭头（与首页/我的对齐为 tab 一级页）；③ `Profile.vue` 加 `padding-bottom: 80px` 让出 TabBar 空间；④ `Home.vue`/`Feed.vue` 发布悬浮按钮 `bottom` 40px→70px（避免被 TabBar 压住）。`npm run build` 通过（nginx root 直指 dist，即时生效）。
 
 ### 🔄 进行中
 - 无（Phase 0–6 全部完成）。
 
 ### ⏭ 下一步
-- 无（项目整体完成，Phase 0–6 全部落地并合回 `main`，`feat/frontend` 分支已删除）。
+- 造种子数据（用户 ~50、岗位 ~40、动态 ~30、报名 ~60、互评 ~40、关注 ~30，让页面有内容可看）。
+- 界面美化（定品牌色 + 统一卡片/间距/字体 + 首页 hero，去掉模板感）。
 
 ---
 

@@ -146,6 +146,9 @@ async function onLogout() {
 </script>
 
 <style scoped>
+.profile {
+  padding-bottom: 80px;
+}
 .user-card {
   display: flex;
   align-items: center;

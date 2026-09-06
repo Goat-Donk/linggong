@@ -1,6 +1,6 @@
 <template>
   <div class="feed">
-    <van-nav-bar title="动态" left-arrow @click-left="$router.back()" />
+    <van-nav-bar title="动态" />
 
     <van-list
       v-model:loading="loading"
@@ -141,7 +141,7 @@ async function onLike(blog) {
 .fab {
   position: fixed;
   right: 16px;
-  bottom: 40px;
+  bottom: 70px;
   display: flex;
   align-items: center;
   gap: 6px;
