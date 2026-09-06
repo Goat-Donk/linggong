@@ -18,6 +18,7 @@
             <p class="blog-card__time">{{ formatRelativeTime(blog.createTime) }}</p>
           </div>
           <van-button
+            v-if="!isMine(blog)"
             size="mini"
             round
             :type="blog.isFollow ? 'default' : 'primary'"
@@ -71,6 +72,7 @@ import { showToast } from 'vant'
 import { queryBlogOfFollow, likeBlog } from '@/api/blog'
 import { follow } from '@/api/follow'
 import { formatRelativeTime } from '@/utils/format'
+import { userState } from '@/stores/user'
 
 const blogs = ref([])
 const loading = ref(false)
@@ -85,6 +87,11 @@ const pageSize = 5
 // 图片字段是逗号分隔字符串，拆成数组供九宫格展示
 function imagesOf(blog) {
   return blog.images ? blog.images.split(',').filter(Boolean) : []
+}
+
+// 是否本人发布的动态（本人动态不显示「关注」按钮）
+function isMine(blog) {
+  return blog.userId === userState.info?.id
 }
 
 async function onLoad() {

@@ -67,8 +67,11 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         blog.setLiked(0);
         save(blog);
 
-        // 推流：把新动态推送给所有粉丝的收件箱
+        // 推流：把新动态推送给所有粉丝的收件箱，并推进作者自己的收件箱
+        // （自己的动态也应出现在「动态」页顶部，符合常见时间线设计）
         pushBlogToFollowers(userId, blog.getId());
+        stringRedisTemplate.opsForZSet().add(
+                RedisConstants.FEED_KEY + userId, blog.getId().toString(), System.currentTimeMillis());
 
         return Result.ok(blog.getId());
     }

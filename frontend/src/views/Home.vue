@@ -76,7 +76,6 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { showToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
 import { getJobsByCategory, getNearbyJobs } from '@/api/job'
 import { formatDistance, formatSalary, formatDateRange } from '@/utils/format'
@@ -117,30 +116,15 @@ onMounted(async () => {
   }
 })
 
-// 切换「只看附近」：先定位成功再真正切换，避免附近模式没坐标就发请求
+// 演示模式：种子数据集中在北京市区，「只看附近」固定以北京市中心为圆心搜索，
+// 保证任何位置打开都能看到附近岗位并按距离排序。
+// 真实项目请改回 navigator.geolocation 获取用户实际定位。
+const DEMO_CENTER = { x: 116.4074, y: 39.9042 }
+
+// 切换「只看附近」：演示阶段用固定坐标，避免种子数据坐标与真实定位不符导致空列表
 function onNearbyToggle(val) {
-  if (!val) {
-    coords.value = null
-    nearbyMode.value = false
-    return
-  }
-  if (!navigator.geolocation) {
-    showToast('当前浏览器不支持定位')
-    return
-  }
-  showLoadingToast({ message: '定位中...', forbidClick: true })
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      closeToast()
-      coords.value = { x: pos.coords.longitude, y: pos.coords.latitude }
-      nearbyMode.value = true
-    },
-    () => {
-      closeToast()
-      showToast('定位失败，请检查定位权限')
-    },
-    { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
-  )
+  nearbyMode.value = val
+  coords.value = val ? { ...DEMO_CENTER } : null
 }
 
 // van-list 触发的分页加载
@@ -157,6 +141,7 @@ async function onLoad() {
           categoryId,
           x: coords.value.x,
           y: coords.value.y,
+          radius: 20000, // 演示：20km 覆盖北京市区大部分岗位
           page: page.value,
           pageSize
         })
