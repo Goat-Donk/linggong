@@ -250,11 +250,13 @@ d:\linggong\
 
 - Phase 6 第 1 步：前端初始化 —— 手写 Vite + Vue3 脚手架（`frontend/`，不用 `npm create vite` 的示例模板）：`package.json` 锁定 vue@3.5 / vue-router@4.6 / axios@1.20 / vant@4.10 / vite@6.4；`vite.config.js` 配 `/api` 代理到后端 8080（`rewrite` 去前缀，开发期免 CORS）；`main.js` 全量引入 Vant + router；`App.vue` 全局基础样式（移动端 viewport + reset）；`router/index.js` 建 home/login 占位路由 + 标题联动；`utils/request.js` 封装 axios（authorization 头放裸 token 无 Bearer 前缀、响应拦截统一处理 Result、401 清 token 跳登录）；`views/Home.vue`/`Login.vue` 占位页。`npm run build` 通过（302 模块，5.3s）。
 
+- Phase 6 第 2 步：登录 + 鉴权 —— 新增 `stores/user.js`（reactive 单例 + localStorage 存 token/info，不引 Pinia，状态复杂再上）、`api/user.js`（sendCode/login/getMe/logout，对齐后端 UserController）；重写 `Login.vue`（手机号+验证码登录：60s 倒计时防重发、van-form 校验、登录成功先存 token 再拉 `/user/me` 存用户信息、跳回 `redirect` 来源页）；`router` 加 `beforeEach` 鉴权守卫（`requiresAuth` 无 token 跳登录并带 redirect）；`Home.vue` 展示登录态（昵称+角色 tag）；新增受保护占位页 `Profile.vue`（用户卡片 + 退出登录）。经 Vite 代理实测端到端：发码 → 登录拿 token → `/user/me` 返回 `{id:1,nickName:"老李",icon:"",role:1}` 全通，无 token 返回 401。
+
 ### 🔄 进行中
-- Phase 6 前端（Step 2 登录 + 鉴权拦截 进行中）。
+- Phase 6 前端（Step 3 首页：岗位列表 + 分类 + 附近搜索 进行中）。
 
 ### ⏭ 下一步
-- Phase 6 Step 2：登录页（手机号 + 验证码）+ 鉴权路由守卫（token 不存在跳登录）。
+- Phase 6 Step 3：首页（岗位列表 + 分类 Tab + 附近搜索）。
 
 ---
 

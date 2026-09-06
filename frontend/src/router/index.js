@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { userState } from '@/stores/user'
 
-// 路由表：先占位，后续每步往里加
+// 路由表：requiresAuth=true 表示需要登录才能访问
 const routes = [
   { path: '/', redirect: '/home' },
   {
@@ -14,12 +15,25 @@ const routes = [
     name: 'login',
     component: () => import('@/views/Login.vue'),
     meta: { title: '登录' }
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { title: '我的', requiresAuth: true }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// 鉴权守卫：需要登录的页面，未登录跳登录页并带上来源（登录后跳回）
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth && !userState.token) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
 })
 
 router.afterEach((to) => {
