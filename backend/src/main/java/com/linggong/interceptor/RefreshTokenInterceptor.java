@@ -1,6 +1,6 @@
 package com.linggong.interceptor;
 
-import cn.hutool.json.JSONUtil;
+import cn.hutool.core.bean.BeanUtil;
 import com.linggong.dto.UserDTO;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.UserHolder;
@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,14 +37,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             return true; // 没带 token，放行
         }
 
-        // 查 Redis 拿用户
-        String userJson = stringRedisTemplate.opsForValue().get(RedisConstants.LOGIN_USER_KEY + token);
-        if (userJson == null) {
+        // 查 Redis 拿用户（Hash 存储，对齐黑马点评原版）
+        Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(RedisConstants.LOGIN_USER_KEY + token);
+        if (userMap.isEmpty()) {
             return true; // token 不存在/已过期，放行
         }
 
-        // 解析并写入 ThreadLocal
-        UserDTO userDTO = JSONUtil.toBean(userJson, UserDTO.class);
+        // 解析并写入 ThreadLocal（fillBeanWithMap 按字段类型把 String 转回 Long/Integer）
+        UserDTO userDTO = BeanUtil.fillBeanWithMap(userMap, new UserDTO(), false);
         UserHolder.saveUser(userDTO);
 
         // 刷新 token 有效期

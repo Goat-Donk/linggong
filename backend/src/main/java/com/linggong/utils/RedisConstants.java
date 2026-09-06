@@ -12,7 +12,7 @@ public final class RedisConstants {
     /** 验证码有效期（分钟） */
     public static final Long LOGIN_CODE_TTL = 2L;
 
-    /** 登录 token key 前缀，完整 key = login:token:{token}，value 存 UserDTO 的 JSON */
+    /** 登录 token key 前缀，完整 key = login:token:{token}，value 存 UserDTO 的 Hash */
     public static final String LOGIN_USER_KEY = "login:token:";
     /** token 有效期（分钟） */
     public static final Long LOGIN_USER_TTL = 30L;

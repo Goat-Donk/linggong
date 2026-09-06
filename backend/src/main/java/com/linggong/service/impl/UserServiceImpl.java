@@ -3,7 +3,6 @@ package com.linggong.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.RandomUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.LoginFormDTO;
 import com.linggong.dto.Result;
@@ -21,7 +20,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -82,15 +83,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (user == null) {
             user = createUserWithPhone(phone);
         }
-        // 4. 生成 token（无横线 UUID），把 UserDTO 存 Redis，30 分钟过期
+        // 4. 生成 token（无横线 UUID），把 UserDTO 存 Redis Hash，TTL 加随机值防雪崩
         String token = IdUtil.simpleUUID();
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
-        stringRedisTemplate.opsForValue().set(
-                RedisConstants.LOGIN_USER_KEY + token,
-                JSONUtil.toJsonStr(userDTO),
-                RedisConstants.LOGIN_USER_TTL,
-                TimeUnit.MINUTES
-        );
+        String tokenKey = RedisConstants.LOGIN_USER_KEY + token;
+        stringRedisTemplate.opsForHash().putAll(tokenKey, beanToHash(userDTO));
+        Long random = (long) RandomUtil.randomInt(3, 10);
+        stringRedisTemplate.expire(tokenKey, RedisConstants.LOGIN_USER_TTL + random, TimeUnit.MINUTES);
         return Result.ok(token);
     }
 
@@ -112,12 +111,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return;
         }
         UserDTO fresh = BeanUtil.copyProperties(user, UserDTO.class);
-        stringRedisTemplate.opsForValue().set(
-                RedisConstants.LOGIN_USER_KEY + token,
-                JSONUtil.toJsonStr(fresh),
-                RedisConstants.LOGIN_USER_TTL,
-                TimeUnit.MINUTES
-        );
+        String tokenKey = RedisConstants.LOGIN_USER_KEY + token;
+        stringRedisTemplate.opsForHash().putAll(tokenKey, beanToHash(fresh));
+        stringRedisTemplate.expire(tokenKey, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
         UserHolder.saveUser(fresh);
     }
 
@@ -167,6 +163,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      */
     private String signKey(Long userId, LocalDateTime now) {
         return RedisConstants.USER_SIGN_KEY + userId + now.format(SIGN_MONTH_FORMATTER);
+    }
+
+    /**
+     * UserDTO 转 Redis Hash（对齐黑马点评原版：token 的 value 存 Hash 而非 JSON 字符串）。
+     *
+     * <p>Redis Hash 只能存字符串，所以把所有字段值统一 toString；null 字段转空串，
+     * 读取时由 {@code BeanUtil.fillBeanWithMap} 再按字段类型转回（Long/Integer 等）。
+     */
+    private Map<String, String> beanToHash(UserDTO userDTO) {
+        Map<String, Object> userMap = BeanUtil.beanToMap(userDTO);
+        Map<String, String> stringMap = new HashMap<>();
+        userMap.forEach((k, v) -> stringMap.put(k, v != null ? v.toString() : ""));
+        return stringMap;
     }
 
     /**
