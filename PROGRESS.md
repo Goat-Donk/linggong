@@ -168,7 +168,7 @@ d:\linggong\
 | **Phase 3 报名+秒杀+MQ** | 报名、限量秒杀、RabbitMQ 异步落单、审核 | Lua、雪花ID、Redisson、MQ | ✅ 完成 |
 | **Phase 4 社交+Feed+签到** | 关注、晒单动态、推流、每日签到 | Set交集、Feed、Bitmap | ✅ 完成 |
 | **Phase 5 互评+上传+收尾** | 互评、文件上传、Knife4j 文档 | 评价、上传 | ✅ 完成 |
-| **Phase 6 前端** | 移动端 H5，连后端 | Vue3 + Vite + Vant4 | 🔄 进行中 |
+| **Phase 6 前端** | 移动端 H5，连后端 | Vue3 + Vite + Vant4 | ✅ 完成 |
 
 ---
 
@@ -264,11 +264,13 @@ d:\linggong\
 
 - Phase 6 第 8 步：全链路联调验证 —— 逐接口核对前后端字段契约（27 个前端 API 调用 vs 8 个 Controller + 全部 DTO 字段，含雪花 ID 字符串化、datetime ISO、ScrollResult 游标、total 分页、UserDTO/JobDTO/BlogDTO/EvaluationDTO/报名 DTO 字段名逐一比对），发现并修复 1 个真实缺陷：`LoginInterceptor` 用 `startsWith("/job")` 前缀过宽，误放行 `/job-application/*`（我的报名/雇主审核），匿名访问在 `UserHolder.getUser().getId()` 处 NPE 返回 500 而非 401；已收紧为 `startsWith("/job/")`（带斜杠边界）+ 显式放行 `/job-category`。重建后端后三阶段全链路 E2E 全通过：① 匿名浏览（分类/岗位详情/评价 200，报名查询正确 401）② 打工人 11 项（报名雪花单号字符串、我的报名字段、上传、发布带图动态、我的动态、关注、关注流游标、点赞、签到、改资料、评雇主）③ 雇主 4 项（看报名 workerName 来自 DB、通过、重复审核拦截、评工人 + 评价列表 2 条）。**Phase 6 前端联调验证完成。**
 
+- Phase 6 第 9 步：生产构建 + 部署收尾 —— `npm run build` 产出 `frontend/dist`（hash 指纹 + gzip，约 3.9s；dist 已由 frontend/.gitignore 忽略不入库）；新增 `deploy/` 目录：`nginx.conf`（生产配置：托管 dist + SPA history 回退 `try_files $uri $uri/ /index.html` + 反代 `/api` 去前缀、`/uploads` 保留路径到 8080 + 静态资源长缓存）、`preview.mjs`（零依赖预览服务器，等价复刻 nginx 行为用于本机验证）、`README.md`（构建/预览/部署说明）。因本机无 nginx 且网络受限（nginx.org 2MB 包 15s 仅下 32KB、GitHub/npm 超时），用 preview.mjs 模拟 nginx 验证生产部署 8 项全通过：根路径 `/`、深链 `/job/8` `/feed` 均回退 index.html、静态资源 JS、反代 GET `/api`、POST `/api/user/code`（方法+query 透传）、`/uploads` 图片 image/png。**Phase 6 前端全部完成，项目收尾。**
+
 ### 🔄 进行中
-- Phase 6 前端（Step 8 全链路联调验证 完成）。
+- 无（Phase 0–6 全部完成）。
 
 ### ⏭ 下一步
-- Phase 6 Step 9：`vite build` 生产构建 + nginx 托管前端静态文件 + 反代 `/api`、`/uploads` 到后端（部署收尾）。
+- 合并 `feat/frontend` → `main` 并删除 feature 分支（Phase 6 完成，项目整体收尾）。
 
 ---
 
