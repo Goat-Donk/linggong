@@ -39,6 +39,12 @@ const routes = [
     name: 'myApplications',
     component: () => import('@/views/MyApplications.vue'),
     meta: { title: '我的报名', requiresAuth: true }
+  },
+  {
+    path: '/employer-applications',
+    name: 'employerApplications',
+    component: () => import('@/views/EmployerApplications.vue'),
+    meta: { title: '审核报名', requiresAuth: true }
   }
 ]
 

@@ -28,6 +28,13 @@
         @click="$router.push('/publish')"
       />
       <van-cell
+        v-if="userState.info?.role === 1"
+        title="审核报名"
+        icon="todo-list-o"
+        is-link
+        @click="$router.push('/employer-applications')"
+      />
+      <van-cell
         title="我的报名"
         icon="orders-o"
         is-link

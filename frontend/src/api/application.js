@@ -9,3 +9,18 @@ export function applyJob(jobId) {
 export function getMyApplications(page, pageSize) {
   return request.get('/job-application/my', { params: { page, pageSize } })
 }
+
+// 雇主视角：我发布岗位下的报名列表（分页），data 为 EmployerApplicationDTO[]（含报名人昵称头像）
+export function getEmployerApplications(page, pageSize) {
+  return request.get('/job-application/employer', { params: { page, pageSize } })
+}
+
+// 雇主通过报名（0 待确认 → 1 已录用）
+export function approveApplication(id) {
+  return request.put(`/job-application/${id}/approve`)
+}
+
+// 雇主拒绝报名（0 待确认 → 3 已取消）
+export function rejectApplication(id) {
+  return request.put(`/job-application/${id}/reject`)
+}
