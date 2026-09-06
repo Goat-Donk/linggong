@@ -41,6 +41,9 @@ spring:
     listener:
       simple:
         acknowledge-mode: manual
+    # 发布确认：correlated 模式 + 不可达路由退回，配合 RabbitConfig 的 confirm/return 回调，让报名消息投递可确认
+    publisher-confirm-type: correlated
+    publisher-returns: true
 
   # ---------- 文件上传 ----------
   servlet:

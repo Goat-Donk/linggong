@@ -22,6 +22,7 @@ import com.linggong.utils.RedisIdWorker;
 import com.linggong.utils.UserHolder;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -111,7 +112,8 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         rabbitTemplate.convertAndSend(
                 MqConstants.JOB_EXCHANGE,
                 MqConstants.JOB_APPLICATION_KEY,
-                JSONUtil.toJsonStr(message));
+                JSONUtil.toJsonStr(message),
+                new CorrelationData(String.valueOf(orderId)));
 
         // 雪花单号超出 JS 安全整数，转字符串返回，避免前端精度丢失
         return Result.ok(String.valueOf(orderId));
