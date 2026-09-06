@@ -269,6 +269,8 @@ d:\linggong\
 - 技术缺口补齐（Redisson RLock）：审查发现 `RedissonClient` 只被布隆过滤器使用、`RLock` 从未接入。补齐两处 —— ① `CacheClient.queryWithMutex` 缓存击穿互斥锁由自研 setnx 换成 `RLock`（可重入 + watchdog 自动续期，修复「unlock 直接 delete 可能误删」缺陷）；② `audit` 审核加业务锁 `RLock`（对标黑马「一人一单」，防并发重复审核，锁粒度=单条报名记录）。`queryWithLogicalExpire` 因「主线程抢锁+异步释放」保留自研锁（RLock 要求同线程）。编译 + 启动 + 岗位详情 + audit 锁路径验证通过。
 - 技术缺口补齐（RabbitMQ 发布确认）：审查发现报名 `convertAndSend` 是 fire-and-forget、无 confirm/return，消息投递失败会「静默丢消息」（名额泄漏 + 用户卡死）。补齐 —— ① `application.yml` 启用 `publisher-confirm-type: correlated` + `publisher-returns`；② `RabbitConfig` 定义 `RabbitTemplate` bean（setMandatory + confirm 回调记 orderId + return 回调 NO_ROUTE 告警）；③ `apply()` 携带 `CorrelationData(orderId)`。异常演练验证：错误路由 key 触发 return 回调 `replyCode=312 NO_ROUTE` + 完整消息体。
 
+- 全面功能验证 + 分类数据修复：对 8 大模块（登录/岗位/报名/关注/Feed/签到/互评/上传 + 接口文档/前端 nginx）端到端验证约 87 项全部通过，核心链路（登录→发岗→Lua 秒杀→MQ 落单→审核→互评）闭环正常。发现并修复 1 个数据 bug：`tb_job_category` 种子数据历史被错误字符集导入导致乱码（双重编码，非代码 bug），已用 pymysql 按 db.sql 种子数据改正 6 条分类名，`/job-category/list` 及 nginx 反代均返回正确中文。
+
 ### 🔄 进行中
 - 无（Phase 0–6 全部完成）。
 
