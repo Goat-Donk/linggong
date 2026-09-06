@@ -256,14 +256,13 @@ d:\linggong\
 
 - Phase 6 第 4 步：岗位详情 + 报名 —— 新增 `api/application.js`（applyJob）、`api/job.js` 补 getJobById、`api/user.js` 补 getUserById；重写 `JobDetail.vue`（岗位信息卡 + 地址/时间/名额 + 发布者卡 + 岗位描述 + 底部固定报名按钮）：发布者信息需登录（`/user/{id}` 不在 LoginInterceptor 放行列表），匿名跳过不影响浏览；报名按钮按「已下架/自己发布/已报名/立即报名」动态禁用与文案；点击报名未登录先跳登录带 redirect，登录后 POST `/job-application/{id}`；成功 toast + 按钮变已报名，失败由 request.js Toast（名额满/重复报名/报自己岗位）。经代理实测：详情返回完整 JobDTO（distance=null）、新工人报名成功返回雪花单号、重复报名拦截、匿名报名 401。**注**：后端最终实现无「普通岗/限量岗」分流，所有报名统一走 Lua 秒杀 + MQ 落单，前端无需区分。
 
-- Phase 6 第 5 步：发布岗位 + 我的报名 —— 新增 `api/job.js` publishJob、`api/application.js` getMyApplications、`utils/format.js` formatApplyStatus/applyStatusType/formatDateTime；新增 `PublishJob.vue`（雇主表单：分类选择器/名称/地址/浏览器定位取经纬度 x/y/薪资/名额 stepper/起止时间 datetime picker 输出 ISO-8601/描述，非雇主 van-empty 拦截）、`MyApplications.vue`（我的报名分页列表，状态机 0待确认/1录用/2完成/3取消 + 岗位/薪资/地址/报名时间）；入口：首页雇主悬浮「发布」按钮 + 个人中心菜单（发布岗位/我的报名）；router 加 /publish、/my-applications。经后端 E2E 实测：雇主发布返回岗位 id 7、工人发布被拒「只有雇主才能发布岗位」、报名后我的报名返回完整 DTO（jobName/status=0待确认/total=1）。**注**：雇主审核（approve/reject）后端缺「按岗位列报名」读接口，前端审核 UI 暂缓。
+- Phase 6 第 5 步：发布岗位 + 我的报名 —— 新增 `api/job.js` publishJob、`api/application.js` getMyApplications、`utils/format.js` formatApplyStatus/applyStatusType/formatDateTime；新增 `PublishJob.vue`（雇主表单：分类选择器/名称/地址/浏览器定位取经纬度 x/y/薪资/名额 stepper/起止时间 datetime picker 输出 ISO-8601/描述，非雇主 van-empty 拦截）、`MyApplications.vue`（我的报名分页列表，状态机 0待确认/1录用/2完成/3取消 + 岗位/薪资/地址/报名时间）；入口：首页雇主悬浮「发布」按钮 + 个人中心菜单（发布岗位/我的报名）；router 加 /publish、/my-applications。经后端 E2E 实测：雇主发布返回岗位 id 7、工人发布被拒「只有雇主才能发布岗位」、报名后我的报名返回完整 DTO（jobName/status=0待确认/total=1）。**补完雇主审核**：后端补 `GET /job-application/employer`（雇主查我发布岗位下的报名，含报名人昵称头像）+ 新 `EmployerApplicationDTO`；前端补 `EmployerApplications.vue`（通过/拒绝按钮，仅待确认显示操作，审核后本地更新状态）+ api approve/reject + 路由 + 个人中心「审核报名」入口。**重要修复**：雪花单号 64 位超 JS 安全整数 2^53，数字传输精度丢失导致审核拿错 id（实测 `...639` 变 `...600`）——已给 `JobApplicationDTO`/`EmployerApplicationDTO` 的 id 加 `@JsonSerialize(ToStringSerializer)` 序列化为字符串、apply 返回单号也转字符串。全项目雪花 ID 仅此两处（Blog/User/Job 均为自增），修复闭环。经后端 E2E：列表返回 string id + workerName、拒绝 0→3、通过 0→1、重复审核拦截「该报名已处理」、apply 返回 string 单号，全通过。
 
 ### 🔄 进行中
-- Phase 6 前端（Step 5 发布岗位 + 我的报名 完成；雇主审核因后端缺读接口暂缓）。
+- Phase 6 前端（Step 5 发布岗位 + 我的报名 + 雇主审核 全部完成）。
 
 ### ⏭ 下一步
-- Phase 6 Step 5 剩余：雇主审核报名（需先补后端 `GET /job-application/employer` 按岗位列报名接口）。
-- 然后 Phase 6 Step 6：关注 + Feed + 点赞 + 签到。
+- Phase 6 Step 6：关注 + Feed + 点赞 + 签到。
 
 ---
 
