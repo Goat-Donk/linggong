@@ -125,6 +125,7 @@ import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
 import { publishJob } from '@/api/job'
+import { regeo } from '@/api/map'
 import { userState } from '@/stores/user'
 
 const router = useRouter()
@@ -162,9 +163,11 @@ const categoryText = computed(() => {
   return c ? c.name : ''
 })
 const timePickerTitle = computed(() => (timeField.value === 'start' ? '开始时间' : '结束时间'))
+// 逆地理编码解析出的文字地址（与手动「工作地址」分开记，定位栏优先显示它）
+const locatedAddress = ref('')
 const locationText = computed(() => {
   if (form.x == null || form.y == null) return '未定位'
-  return `已获取（${form.x.toFixed(4)}, ${form.y.toFixed(4)}）`
+  return locatedAddress.value || '已定位'
 })
 
 onMounted(async () => {
@@ -180,10 +183,21 @@ function onLocate() {
   showLoadingToast({ message: '定位中...', forbidClick: true })
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      closeToast()
       form.x = pos.coords.longitude
       form.y = pos.coords.latitude
+      closeToast()
       showSuccessToast('定位成功')
+      // 拿到坐标即定位成功；逆地理编码异步补文字地址，失败不影响「已定位」状态
+      regeo(form.x, form.y)
+        .then((res) => {
+          if (res.data) {
+            locatedAddress.value = res.data
+            form.address = res.data
+          }
+        })
+        .catch(() => {
+          // 地址解析失败：request.js 已 Toast，地址留空可手动填
+        })
     },
     () => {
       closeToast()

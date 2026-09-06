@@ -81,3 +81,9 @@ logging:
 linggong:
   upload:
     dir: ${user.dir}/uploads/
+  # 高德地图 Web服务 Key（逆地理编码用）。个人 Key 不入库，运行时用环境变量 AMAP_KEY 注入：
+  #   Git Bash：  export AMAP_KEY=你的key && mvn spring-boot:run
+  #   CMD：       set AMAP_KEY=你的key && mvn spring-boot:run
+  #   （一次性持久化：setx AMAP_KEY 你的key，之后重启终端即可）
+  amap:
+    key: ${AMAP_KEY:}
