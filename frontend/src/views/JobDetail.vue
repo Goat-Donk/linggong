@@ -44,6 +44,29 @@
         <h3 class="desc__title">岗位描述</h3>
         <p class="desc__content">{{ job.description || '暂无描述' }}</p>
       </div>
+
+      <!-- 互评 -->
+      <div class="eval-section">
+        <div class="eval-section__head">
+          <h3 class="eval-section__title">评价（{{ evalTotal }}）</h3>
+          <van-button v-if="evalAction" size="mini" type="primary" plain @click="openEvaluate">
+            {{ evalAction.text }}
+          </van-button>
+        </div>
+
+        <div v-for="e in evaluations" :key="e.id" class="eval-item">
+          <div class="eval-item__head">
+            <van-image v-if="e.fromIcon" round width="28" height="28" :src="e.fromIcon" />
+            <van-icon v-else name="contact" size="28" color="#c8c9cc" />
+            <span class="eval-item__name">{{ e.fromNickName }}</span>
+            <van-rate :model-value="e.rating" readonly :size="14" color="#ff976a" />
+            <span class="eval-item__to">评 {{ e.toNickName }}</span>
+          </div>
+          <p v-if="e.content" class="eval-item__content">{{ e.content }}</p>
+          <p class="eval-item__time">{{ formatRelativeTime(e.createTime) }}</p>
+        </div>
+        <van-empty v-if="evaluations.length === 0" description="暂无评价" />
+      </div>
     </template>
 
     <div v-if="job" class="apply-bar">
@@ -58,18 +81,55 @@
         {{ applyText }}
       </van-button>
     </div>
+
+    <!-- 评价表单弹层 -->
+    <van-popup v-model:show="evalShow" position="bottom" round>
+      <div class="eval-form">
+        <h4 class="eval-form__title">{{ evalTargetName }}</h4>
+        <div class="eval-form__rate">
+          <van-rate v-model="evalForm.rating" :count="5" :size="28" color="#ff976a" />
+        </div>
+        <van-field
+          v-model="evalForm.content"
+          type="textarea"
+          rows="3"
+          placeholder="说说这次合作体验（选填）"
+          maxlength="1024"
+          show-word-limit
+        />
+        <van-button
+          class="eval-form__submit"
+          round
+          block
+          type="primary"
+          :loading="evalSubmitting"
+          @click="submitEval"
+        >
+          提交评价
+        </van-button>
+      </div>
+    </van-popup>
+
+    <!-- 雇主选工人弹层 -->
+    <van-action-sheet
+      v-model:show="workerSheetShow"
+      :actions="workerActions"
+      title="选择要评价的工人"
+      @select="onPickWorker"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showSuccessToast } from 'vant'
+import { showSuccessToast, showToast } from 'vant'
 import { getJobById } from '@/api/job'
 import { getUserById } from '@/api/user'
-import { applyJob } from '@/api/application'
+import { applyJob, getMyApplications, getEmployerApplications } from '@/api/application'
+import { getEvaluationsByJob, publishEvaluation } from '@/api/evaluation'
 import { userState } from '@/stores/user'
-import { formatSalary, formatDateRange } from '@/utils/format'
+import { formatSalary, formatDateRange, formatRelativeTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -79,6 +139,16 @@ const publisher = ref(null)
 const applying = ref(false)
 const applied = ref(false)
 const loadFailed = ref(false)
+
+// 互评相关状态
+const evaluations = ref([])
+const evalTotal = ref(0)
+const evalShow = ref(false)
+const evalSubmitting = ref(false)
+const evalForm = reactive({ toUserId: null, rating: 5, content: '' })
+const evalTargetName = ref('')
+const workerSheetShow = ref(false)
+const workerActions = ref([])
 
 const canApply = computed(() => {
   if (!job.value) return false
@@ -94,6 +164,14 @@ const applyText = computed(() => {
   if (applied.value) return '已报名'
   if (userState.info && userState.info.id === job.value.employerId) return '自己发布的岗位'
   return '立即报名'
+})
+
+// 谁能评价：雇主 → 选工人评；已报名工人 → 评雇主；其余不显示
+const evalAction = computed(() => {
+  if (!job.value || !userState.token) return null
+  if (userState.info?.id === job.value.employerId) return { text: '评价工人', kind: 'worker' }
+  if (applied.value) return { text: '评价雇主', kind: 'employer' }
+  return null
 })
 
 onMounted(async () => {
@@ -113,6 +191,12 @@ onMounted(async () => {
       // 拉不到发布者不阻断详情
     }
   }
+  // 评价列表公开可看（后端已放行 GET /evaluation）
+  loadEvaluations()
+  // 已登录且非雇主：查是否已报名，决定「评价雇主」按钮 + 报名按钮状态
+  if (userState.token && userState.info?.id !== job.value.employerId) {
+    checkApplied()
+  }
 })
 
 async function onApply() {
@@ -129,6 +213,92 @@ async function onApply() {
     // 失败提示已由 request.js Toast（名额满/重复报名/不能报自己岗位等）
   } finally {
     applying.value = false
+  }
+}
+
+async function loadEvaluations() {
+  try {
+    const res = await getEvaluationsByJob(job.value.id, 1, 10)
+    evaluations.value = res.data || []
+    evalTotal.value = res.total || 0
+  } catch (e) {
+    // 拉不到评价不阻断详情
+  }
+}
+
+// 查历史报名状态：让「已报名」与「评价雇主」按钮在刷新后依然正确
+async function checkApplied() {
+  try {
+    const res = await getMyApplications(1, 50)
+    const list = res.data || []
+    applied.value = list.some((a) => a.jobId === job.value.id)
+  } catch (e) {
+    // 查不到报名状态不影响浏览
+  }
+}
+
+async function openEvaluate() {
+  if (!userState.token) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const action = evalAction.value
+  if (!action) return
+  if (action.kind === 'worker') {
+    await loadApplicants() // 雇主：先选要评价的工人
+  } else {
+    startEval(job.value.employerId, publisher.value?.nickName || '雇主')
+  }
+}
+
+async function loadApplicants() {
+  try {
+    const res = await getEmployerApplications(1, 100)
+    const list = (res.data || []).filter((a) => a.jobId === job.value.id)
+    if (list.length === 0) {
+      showToast('该岗位还没有报名的工人')
+      return
+    }
+    workerActions.value = list.map((a) => ({
+      name: a.workerName || `用户${a.workerId}`,
+      workerId: a.workerId,
+      workerName: a.workerName
+    }))
+    workerSheetShow.value = true
+  } catch (e) {
+    // 失败提示已由 request.js Toast
+  }
+}
+
+function onPickWorker(action) {
+  workerSheetShow.value = false
+  startEval(action.workerId, action.name)
+}
+
+function startEval(toUserId, name) {
+  evalForm.toUserId = toUserId
+  evalForm.rating = 5
+  evalForm.content = ''
+  evalTargetName.value = `评价 ${name}`
+  evalShow.value = true
+}
+
+async function submitEval() {
+  evalSubmitting.value = true
+  try {
+    await publishEvaluation({
+      jobId: job.value.id,
+      toUserId: evalForm.toUserId,
+      rating: evalForm.rating,
+      content: evalForm.content
+    })
+    showSuccessToast('评价成功')
+    evalShow.value = false
+    loadEvaluations() // 刷新列表
+  } catch (e) {
+    // 失败提示已由 request.js Toast（不能评自己/未报名/已评价过等）
+  } finally {
+    evalSubmitting.value = false
   }
 }
 </script>
@@ -220,5 +390,71 @@ async function onApply() {
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: #fff;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+}
+.eval-section {
+  margin: 12px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+}
+.eval-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.eval-section__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323233;
+}
+.eval-item {
+  padding: 12px 0;
+  border-top: 1px solid #f0f1f2;
+}
+.eval-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+.eval-item__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eval-item__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #323233;
+}
+.eval-item__to {
+  font-size: 12px;
+  color: #969799;
+}
+.eval-item__content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #646566;
+  margin-top: 8px;
+  word-break: break-word;
+}
+.eval-item__time {
+  font-size: 12px;
+  color: #c8c9cc;
+  margin-top: 6px;
+}
+.eval-form {
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+}
+.eval-form__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #323233;
+  margin-bottom: 12px;
+}
+.eval-form__rate {
+  margin-bottom: 12px;
+}
+.eval-form__submit {
+  margin-top: 16px;
 }
 </style>

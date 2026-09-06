@@ -18,6 +18,7 @@ public class LoginInterceptor implements HandlerInterceptor {
         String uri = request.getRequestURI();
         if ("GET".equalsIgnoreCase(request.getMethod())
                 && (uri.startsWith("/job")
+                    || uri.startsWith("/evaluation")
                     || uri.startsWith("/doc.html")
                     || uri.startsWith("/v3/api-docs")
                     || uri.startsWith("/webjars")

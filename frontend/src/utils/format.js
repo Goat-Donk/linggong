@@ -43,6 +43,11 @@ export function formatDateTime(s) {
   return String(s).replace('T', ' ').slice(0, 16)
 }
 
+// 性别 0 未知 / 1 男 / 2 女 → 文案
+export function formatGender(g) {
+  return { 0: '保密', 1: '男', 2: '女' }[g] ?? '保密'
+}
+
 // 相对时间 "2026-09-06T10:00:00" → 刚刚 / 3分钟前 / 2小时前 / 3天前（超 30 天回落绝对时间）
 export function formatRelativeTime(s) {
   if (!s) return ''

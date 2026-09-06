@@ -47,6 +47,18 @@
         @click="$router.push('/feed')"
       />
       <van-cell
+        title="发布动态"
+        icon="edit"
+        is-link
+        @click="$router.push('/publish-blog')"
+      />
+      <van-cell
+        title="我的动态"
+        icon="notes-o"
+        is-link
+        @click="$router.push('/my-blogs')"
+      />
+      <van-cell
         v-if="userState.info?.role === 1"
         title="发布岗位"
         icon="plus"
@@ -66,10 +78,16 @@
         is-link
         @click="$router.push('/my-applications')"
       />
+      <van-cell
+        title="编辑资料"
+        icon="setting-o"
+        is-link
+        @click="$router.push('/edit-profile')"
+      />
     </van-cell-group>
 
     <div class="placeholder">
-      <p class="sub">Step 7 实现：晒单动态 · 资料编辑 · 互评</p>
+      <p class="sub">Step 8 实现：全链路联调验证</p>
     </div>
 
     <div class="logout">

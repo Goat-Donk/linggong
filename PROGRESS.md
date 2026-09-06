@@ -260,11 +260,13 @@ d:\linggong\
 
 - Phase 6 第 6 步：关注 + Feed + 点赞 + 签到 —— 后端 `BlogDTO` 补 `isFollow`（与 `isLike` 对称：取关后旧动态仍留在收件箱，关注状态必须由后端返回，不能前端推断），`BlogServiceImpl.queryBlogOfFollow` 批量填充 `isFollow`（读 Redis follows 集合）；前端新增 `api/blog.js`（queryBlogOfFollow 滚动分页 + likeBlog）、`api/follow.js`（follow 关注/取关）、`api/user.js` 补 sign/signCount、`utils/format.js` 加 formatRelativeTime；新增 `Feed.vue`（关注流 van-list 无限滚动 lastId+offset 游标 + 点赞/关注/取关本地即时更新 + 相对时间 + 图片九宫格 + 空状态），`Profile.vue` 加「每日签到」卡片（用 signCount>0 推导今天已签，无需额外接口）+ 动态入口，`Home.vue` 导航加动态入口，router 加 /feed。经后端 E2E 10 项全通过：发布动态 3 条 → 关注两人 → 关注流时间倒序含 isFollow=true 与作者真实昵称 → 滚动分页游标 minTime/offset 正确、第二页为空 → isFollow 校验 true/false → 点赞 liked 0→1→0 与 isLike 切换 → 取关 isFollow→false → 签到幂等 signCount=1 → 未签到用户 signCount=0。**注**：晒单「发布 UI」留到 Step 7（需文件上传），本步 Feed 用接口发布种子数据联调。
 
+- Phase 6 第 7 步：互评 + 个人中心/上传 —— 后端 `LoginInterceptor` 放行 GET `/evaluation`（匿名浏览岗位时也能看评价，与匿名逛岗位一致，原实现会 401 跳登录）；前端 `vite.config.js` 补 `/uploads` 代理（上传后的图片 `/uploads/{文件名}` 在 dev 下可直接显示）；新增 `api/upload.js`（uploadImage multipart POST /upload/image）、`api/evaluation.js`（getEvaluationsByJob + publishEvaluation）、`api/blog.js` 补 publishBlog/getMyBlogs、`api/user.js` 补 updateProfile/getUserInfo；新增 `PublishBlog.vue`（标题+内容+van-uploader 九宫格多图，选图即传回填 item.url，提交前拦截「上传中」防丢图，images 逗号拼接）、`EditProfile.vue`（头像单图上传 + 昵称/性别/年龄/简介，昵称头像从登录态取、简介年龄性别从资料表取，保存后 getMe 刷新本地登录态）、`MyBlogs.vue`（我的动态 van-list 分页）；`JobDetail.vue` 加互评区（评价列表 + 雇主「评价工人」弹选人 action-sheet / 已报名工人「评价雇主」弹 van-rate + 文本，evalAction 按身份推导，匿名不显示）、`Profile.vue` 加发布动态/我的动态/编辑资料入口 + Step 8 占位、`Feed.vue` 加「发布」悬浮按钮，router 加 /publish-blog、/my-blogs、/edit-profile。经后端 E2E 12 项全通过：匿名 GET /evaluation 200 → 上传图片返回 /uploads/xxx 且匿名可访问 → 发布带图动态成功 → 改资料（昵称张三+头像）/user/me 与 /user/info 同步更新 → 工人评雇主成功 → 重复评价拦截「您已评价过该岗位」→ 雇主评工人成功（选工人数据源 /job-application/employer 按 jobId 过滤正确）→ 评自己拦截「不能评价自己」→ 评价列表计数正确。
+
 ### 🔄 进行中
-- Phase 6 前端（Step 6 关注 + Feed + 点赞 + 签到 全部完成）。
+- Phase 6 前端（Step 7 互评 + 个人中心/上传 全部完成）。
 
 ### ⏭ 下一步
-- Phase 6 Step 7：互评 + 个人中心/上传（发布晒单动态、资料编辑、头像/图片上传、互评）。
+- Phase 6 Step 8：全链路联调验证（前端页面 + 后端接口整体走查，核对前后端字段契约与边界）。
 
 ---
 

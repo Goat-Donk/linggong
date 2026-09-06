@@ -56,6 +56,12 @@
 
       <van-empty v-if="finished && blogs.length === 0" description="还没有关注动态，去关注更多打工人吧" />
     </van-list>
+
+    <!-- 发布动态入口 -->
+    <div class="fab" @click="$router.push('/publish-blog')">
+      <van-icon name="edit" size="20" color="#fff" />
+      <span class="fab__text">发布</span>
+    </div>
   </div>
 </template>
 
@@ -130,7 +136,25 @@ async function onLike(blog) {
 
 <style scoped>
 .feed {
-  padding-bottom: 40px;
+  padding-bottom: 80px;
+}
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 18px;
+  background: #1989fa;
+  color: #fff;
+  border-radius: 24px;
+  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
+  z-index: 10;
+}
+.fab__text {
+  font-size: 14px;
+  font-weight: 600;
 }
 .blog-card {
   margin: 12px 12px 0;

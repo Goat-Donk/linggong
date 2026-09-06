@@ -35,6 +35,24 @@ const routes = [
     meta: { title: '动态', requiresAuth: true }
   },
   {
+    path: '/publish-blog',
+    name: 'publishBlog',
+    component: () => import('@/views/PublishBlog.vue'),
+    meta: { title: '发布动态', requiresAuth: true }
+  },
+  {
+    path: '/my-blogs',
+    name: 'myBlogs',
+    component: () => import('@/views/MyBlogs.vue'),
+    meta: { title: '我的动态', requiresAuth: true }
+  },
+  {
+    path: '/edit-profile',
+    name: 'editProfile',
+    component: () => import('@/views/EditProfile.vue'),
+    meta: { title: '编辑资料', requiresAuth: true }
+  },
+  {
     path: '/publish',
     name: 'publish',
     component: () => import('@/views/PublishJob.vue'),
