@@ -4,3 +4,8 @@ import request from '@/utils/request'
 export function applyJob(jobId) {
   return request.post(`/job-application/${jobId}`)
 }
+
+// 我的报名记录（分页），data 为 JobApplicationDTO[]，total 为总数
+export function getMyApplications(page, pageSize) {
+  return request.get('/job-application/my', { params: { page, pageSize } })
+}

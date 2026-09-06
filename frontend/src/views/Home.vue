@@ -56,6 +56,12 @@
 
       <van-empty v-if="finished && jobs.length === 0" description="暂无岗位" />
     </van-list>
+
+    <!-- 雇主发布入口：悬浮按钮，仅雇主可见 -->
+    <div v-if="userState.info?.role === 1" class="fab" @click="$router.push('/publish')">
+      <van-icon name="plus" size="20" color="#fff" />
+      <span class="fab__text">发布</span>
+    </div>
   </div>
 </template>
 
@@ -65,6 +71,7 @@ import { showToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
 import { getJobsByCategory, getNearbyJobs } from '@/api/job'
 import { formatDistance, formatSalary, formatDateRange } from '@/utils/format'
+import { userState } from '@/stores/user'
 
 const categories = ref([])
 const activeCategoryId = ref(null)
@@ -167,7 +174,7 @@ async function onLoad() {
 
 <style scoped>
 .home {
-  padding-bottom: 24px;
+  padding-bottom: 80px;
 }
 .nearby-bar {
   display: flex;
@@ -225,5 +232,23 @@ async function onLoad() {
 }
 .job-card__time {
   margin-left: auto;
+}
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 18px;
+  background: #1989fa;
+  color: #fff;
+  border-radius: 24px;
+  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
+  z-index: 10;
+}
+.fab__text {
+  font-size: 14px;
+  font-weight: 600;
 }
 </style>

@@ -27,6 +27,18 @@ const routes = [
     name: 'jobDetail',
     component: () => import('@/views/JobDetail.vue'),
     meta: { title: '岗位详情' }
+  },
+  {
+    path: '/publish',
+    name: 'publish',
+    component: () => import('@/views/PublishJob.vue'),
+    meta: { title: '发布岗位', requiresAuth: true }
+  },
+  {
+    path: '/my-applications',
+    name: 'myApplications',
+    component: () => import('@/views/MyApplications.vue'),
+    meta: { title: '我的报名', requiresAuth: true }
   }
 ]
 

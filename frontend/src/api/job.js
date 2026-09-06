@@ -14,3 +14,9 @@ export function getNearbyJobs(params) {
 export function getJobById(id) {
   return request.get(`/job/${id}`)
 }
+
+// 发布岗位（仅雇主 role=1），成功 data 为岗位 id
+// form: { categoryId, name, address, x, y, salary, headcount, startTime, endTime, description }
+export function publishJob(form) {
+  return request.post('/job', form)
+}

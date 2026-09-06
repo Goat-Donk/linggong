@@ -19,9 +19,24 @@
       </div>
     </div>
 
+    <van-cell-group inset class="menu">
+      <van-cell
+        v-if="userState.info?.role === 1"
+        title="发布岗位"
+        icon="plus"
+        is-link
+        @click="$router.push('/publish')"
+      />
+      <van-cell
+        title="我的报名"
+        icon="orders-o"
+        is-link
+        @click="$router.push('/my-applications')"
+      />
+    </van-cell-group>
+
     <div class="placeholder">
-      <p>个人中心占位</p>
-      <p class="sub">Step 7 实现：资料编辑 / 我的报名 / 我的动态 / 签到</p>
+      <p class="sub">Step 6/7 实现：我的动态 · 关注 · 签到 · 资料编辑 · 互评</p>
     </div>
 
     <div class="logout">
