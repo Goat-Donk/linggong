@@ -46,4 +46,20 @@ public interface IJobService extends IService<Job> {
      * 按关键词搜索上架岗位（岗位名称模糊匹配）。
      */
     Result queryByKeyword(String keyword, Integer page, Integer pageSize);
+
+    /**
+     * 统一岗位列表查询：关键词搜索 + 分类 + 薪资/距离筛选 + 排序 + 分页。
+     *
+     * @param keyword     岗位名称关键词（可空）
+     * @param categoryId  分类 id（可空，空则全部分类）
+     * @param minSalary   薪资下限（可空）
+     * @param maxSalary   薪资上限（可空）
+     * @param x           用户经度（距离排序/筛选时必填）
+     * @param y           用户纬度（距离排序/筛选时必填）
+     * @param maxDistance 距离上限（米，可空）
+     * @param sort        排序：latest（默认）/ salary / distance
+     */
+    Result queryList(String keyword, Long categoryId, Integer minSalary, Integer maxSalary,
+                     Double x, Double y, Double maxDistance, String sort,
+                     Integer page, Integer pageSize);
 }

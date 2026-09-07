@@ -101,4 +101,22 @@ public class JobController {
                                  @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return jobService.queryByKeyword(keyword, page, pageSize);
     }
+
+    /**
+     * 统一岗位列表查询（关键词搜索 + 分类 + 薪资/距离筛选 + 排序 + 分页）。
+     */
+    @Operation(summary = "统一岗位列表查询（搜索/筛选/排序）")
+    @GetMapping("/list")
+    public Result queryList(@Parameter(description = "关键词") @RequestParam(required = false) String keyword,
+                            @Parameter(description = "分类 id（空则全部）") @RequestParam(required = false) Long categoryId,
+                            @Parameter(description = "薪资下限") @RequestParam(required = false) Integer minSalary,
+                            @Parameter(description = "薪资上限") @RequestParam(required = false) Integer maxSalary,
+                            @Parameter(description = "用户经度") @RequestParam(required = false) Double x,
+                            @Parameter(description = "用户纬度") @RequestParam(required = false) Double y,
+                            @Parameter(description = "距离上限（米）") @RequestParam(required = false) Double maxDistance,
+                            @Parameter(description = "排序：latest/salary/distance，默认 latest") @RequestParam(defaultValue = "latest") String sort,
+                            @Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
+                            @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        return jobService.queryList(keyword, categoryId, minSalary, maxSalary, x, y, maxDistance, sort, page, pageSize);
+    }
 }

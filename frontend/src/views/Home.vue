@@ -7,7 +7,7 @@
       </template>
     </van-nav-bar>
 
-    <!-- 首页 hero：品牌区，让首页有「脸」 -->
+    <!-- 首页 hero：品牌区 -->
     <div class="hero">
       <div class="hero__text">
         <h2 class="hero__title">找个零工，就在附近</h2>
@@ -15,22 +15,29 @@
       </div>
     </div>
 
-    <!-- 附近模式开关 -->
-    <div class="nearby-bar">
-      <span class="nearby-bar__label">
-        <van-icon name="location-o" /> 只看附近
-      </span>
-      <van-switch :model-value="nearbyMode" size="20" @update:model-value="onNearbyToggle" />
-    </div>
+    <!-- 搜索框：回车/点搜索才生效，清除即重置为全量 -->
+    <van-search
+      v-model="keyword"
+      placeholder="搜索岗位名称"
+      shape="round"
+      @search="onSearch"
+      @clear="onSearchClear"
+    />
 
-    <!-- 分类 Tab -->
+    <!-- 分类 Tab（含「全部」） -->
     <van-tabs v-model:active="activeCategoryId" line-width="24">
-      <van-tab v-for="cat in categories" :key="cat.id" :name="cat.id" :title="cat.name" />
+      <van-tab v-for="cat in tabs" :key="cat.id" :name="cat.id" :title="cat.name" />
     </van-tabs>
+
+    <!-- 排序 / 筛选 -->
+    <van-dropdown-menu>
+      <van-dropdown-item v-model="sort" :options="sortOptions" />
+      <van-dropdown-item v-model="salaryKey" :options="salaryOptions" />
+      <van-dropdown-item v-model="distanceValue" :options="distanceOptions" />
+    </van-dropdown-menu>
 
     <!-- 岗位列表 -->
     <van-list
-      v-if="categories.length"
       :key="listKey"
       v-model:loading="loading"
       :finished="finished"
@@ -50,7 +57,7 @@
         <div class="job-card__row">
           <van-icon name="location-o" />
           <span class="job-card__address">{{ job.address }}</span>
-          <span v-if="nearbyMode && job.distance != null" class="job-card__distance">
+          <span v-if="job.distance != null" class="job-card__distance">
             {{ formatDistance(job.distance) }}
           </span>
         </div>
@@ -77,14 +84,24 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { getCategories } from '@/api/category'
-import { getJobsByCategory, getNearbyJobs } from '@/api/job'
+import { getJobList } from '@/api/job'
 import { formatDistance, formatSalary, formatDateRange } from '@/utils/format'
 import { userState } from '@/stores/user'
 
+// 「全部」分类哨兵值：0 表示不按分类过滤（分类表 id 自增从 1 开始，不会冲突）
+const ALL_CATEGORY_ID = 0
+
 const categories = ref([])
-const activeCategoryId = ref(null)
-const nearbyMode = ref(false)
-const coords = ref(null) // { x: 经度, y: 纬度 }
+const activeCategoryId = ref(ALL_CATEGORY_ID)
+
+// 搜索：keyword 是输入框实时值，searchKeyword 是「已提交」的关键词，避免逐字触发查询
+const keyword = ref('')
+const searchKeyword = ref('')
+
+// 排序 / 筛选状态
+const sort = ref('latest') // latest 最新 / salary 薪资最高 / distance 距离最近
+const salaryKey = ref('all') // all / lt200 / 200to400 / gt400
+const distanceValue = ref(0) // 米，0 表示不限
 
 const jobs = ref([])
 const page = ref(1)
@@ -95,9 +112,35 @@ const pageSize = 10
 // 过期请求序号：筛选条件变化时 ++，丢弃还在途中的旧请求结果，避免串数据
 let requestSeq = 0
 
+const sortOptions = [
+  { text: '最新', value: 'latest' },
+  { text: '薪资最高', value: 'salary' },
+  { text: '距离最近', value: 'distance' }
+]
+const salaryOptions = [
+  { text: '薪资不限', value: 'all' },
+  { text: '200 以下', value: 'lt200' },
+  { text: '200 - 400', value: '200to400' },
+  { text: '400 以上', value: 'gt400' }
+]
+const distanceOptions = [
+  { text: '距离不限', value: 0 },
+  { text: '1 公里内', value: 1000 },
+  { text: '3 公里内', value: 3000 },
+  { text: '5 公里内', value: 5000 },
+  { text: '10 公里内', value: 10000 }
+]
+
+// 分类 Tab：最前插入「全部」
+const tabs = computed(() => [{ id: ALL_CATEGORY_ID, name: '全部' }, ...categories.value])
+
+// 演示模式：种子数据集中在北京市区，距离排序/筛选固定以北京市中心为圆心，
+// 保证任何位置打开都能看到按距离排序的结果。真实项目请改回 navigator.geolocation。
+const DEMO_CENTER = { x: 116.4074, y: 39.9042 }
+
 // 筛选条件变化 → 换 key 让 van-list 重挂载 → 自动重新触发首屏 onLoad
 const listKey = computed(
-  () => `${activeCategoryId.value}|${nearbyMode.value}|${coords.value?.x}|${coords.value?.y}`
+  () => `${activeCategoryId.value}|${searchKeyword.value}|${sort.value}|${salaryKey.value}|${distanceValue.value}`
 )
 
 watch(listKey, () => {
@@ -111,47 +154,54 @@ watch(listKey, () => {
 onMounted(async () => {
   const res = await getCategories()
   categories.value = res.data || []
-  if (categories.value.length) {
-    activeCategoryId.value = categories.value[0].id
-  }
 })
 
-// 演示模式：种子数据集中在北京市区，「只看附近」固定以北京市中心为圆心搜索，
-// 保证任何位置打开都能看到附近岗位并按距离排序。
-// 真实项目请改回 navigator.geolocation 获取用户实际定位。
-const DEMO_CENTER = { x: 116.4074, y: 39.9042 }
+function onSearch() {
+  searchKeyword.value = keyword.value.trim()
+}
 
-// 切换「只看附近」：演示阶段用固定坐标，避免种子数据坐标与真实定位不符导致空列表
-function onNearbyToggle(val) {
-  nearbyMode.value = val
-  coords.value = val ? { ...DEMO_CENTER } : null
+function onSearchClear() {
+  searchKeyword.value = ''
+}
+
+// 薪资筛选 key → 薪资区间
+function salaryParams() {
+  switch (salaryKey.value) {
+    case 'lt200':
+      return { maxSalary: 200 }
+    case '200to400':
+      return { minSalary: 200, maxSalary: 400 }
+    case 'gt400':
+      return { minSalary: 400 }
+    default:
+      return {}
+  }
 }
 
 // van-list 触发的分页加载
 async function onLoad() {
-  const categoryId = activeCategoryId.value
-  if (categoryId == null) {
-    loading.value = false
-    return
-  }
   const seq = ++requestSeq
+  const needDistance = sort.value === 'distance' || distanceValue.value > 0
+  const { minSalary, maxSalary } = salaryParams()
+  const params = {
+    keyword: searchKeyword.value || null,
+    categoryId: activeCategoryId.value === ALL_CATEGORY_ID ? null : activeCategoryId.value,
+    minSalary: minSalary ?? null,
+    maxSalary: maxSalary ?? null,
+    x: needDistance ? DEMO_CENTER.x : null,
+    y: needDistance ? DEMO_CENTER.y : null,
+    maxDistance: distanceValue.value > 0 ? distanceValue.value : null,
+    sort: sort.value,
+    page: page.value,
+    pageSize
+  }
   try {
-    const res = nearbyMode.value
-      ? await getNearbyJobs({
-          categoryId,
-          x: coords.value.x,
-          y: coords.value.y,
-          radius: 20000, // 演示：20km 覆盖北京市区大部分岗位
-          page: page.value,
-          pageSize
-        })
-      : await getJobsByCategory(categoryId, page.value, pageSize)
+    const res = await getJobList(params)
     if (seq !== requestSeq) return // 旧请求，丢弃
     const list = res.data || []
     jobs.value.push(...list)
     const total = res.total
-    // 是否到底：返回不满一页，或有 total 且已累计到 total。
-    // 附近搜索后端不返回 total（为 null），此时只靠「不满一页」判断。
+    // 是否到底：返回不满一页，或有 total 且已累计到 total
     const noMore = list.length < pageSize || (total != null && jobs.value.length >= total)
     if (noMore) {
       finished.value = true
@@ -190,21 +240,6 @@ async function onLoad() {
   margin-top: 6px;
   font-size: 13px;
   opacity: 0.85;
-}
-.nearby-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
-}
-.nearby-bar__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  color: var(--text-secondary);
 }
 .job-card {
   margin: 12px 12px 0;

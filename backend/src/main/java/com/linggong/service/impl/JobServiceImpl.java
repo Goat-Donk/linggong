@@ -1,6 +1,7 @@
 package com.linggong.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.JobDTO;
@@ -11,6 +12,7 @@ import com.linggong.entity.Job;
 import com.linggong.mapper.JobMapper;
 import com.linggong.service.IJobService;
 import com.linggong.utils.CacheClient;
+import com.linggong.utils.GeoUtil;
 import com.linggong.utils.JobBloomFilter;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.UserHolder;
@@ -22,9 +24,11 @@ import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.domain.geo.GeoReference;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +207,66 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
                 .orderByDesc(Job::getCreateTime)
                 .page(new Page<>(page, pageSize));
         return Result.ok(result.getRecords(), result.getTotal());
+    }
+
+    @Override
+    public Result queryList(String keyword, Long categoryId, Integer minSalary, Integer maxSalary,
+                            Double x, Double y, Double maxDistance, String sort,
+                            Integer page, Integer pageSize) {
+        // 距离排序 / 筛选必须提供用户坐标
+        boolean needDistance = "distance".equals(sort) || maxDistance != null;
+        if (needDistance && (x == null || y == null)) {
+            return Result.fail("按距离排序或筛选需要提供定位");
+        }
+
+        // 1. 非距离条件统一组装（关键词 / 分类 / 薪资区间 / 上架）
+        LambdaQueryWrapper<Job> wrapper = new LambdaQueryWrapper<Job>()
+                .eq(Job::getStatus, 0)
+                .eq(categoryId != null, Job::getCategoryId, categoryId)
+                .like(StringUtils.hasText(keyword), Job::getName, keyword)
+                .ge(minSalary != null, Job::getSalary, minSalary)
+                .le(maxSalary != null, Job::getSalary, maxSalary);
+
+        // 2. 不涉及距离：数据库排序 + 分页（性能最好）
+        if (!needDistance) {
+            if ("salary".equals(sort)) {
+                wrapper.orderByDesc(Job::getSalary);
+            } else {
+                wrapper.orderByDesc(Job::getCreateTime);
+            }
+            Page<Job> result = page(new Page<>(page, pageSize), wrapper);
+            return Result.ok(result.getRecords(), result.getTotal());
+        }
+
+        // 3. 涉及距离：查全量候选，Java 算距离 → 过滤 → 排序 → 内存分页。
+        //    距离是「按用户坐标现算」的，无法用 DB 索引直接排序；教学项目数据量小，
+        //    内存计算足够。Redis GEO 已用于「按分类附近搜索」场景，这里为支持
+        //    跨分类 + 关键词 + 薪资 + 距离的任意组合，用 haversine 统一处理。
+        List<JobDTO> matched = new ArrayList<>();
+        for (Job job : list(wrapper)) {
+            if (job.getX() == null || job.getY() == null) {
+                continue; // 无坐标岗位无法参与距离计算
+            }
+            double distance = GeoUtil.distanceMeters(x, y, job.getX(), job.getY());
+            if (maxDistance != null && distance > maxDistance) {
+                continue;
+            }
+            JobDTO dto = BeanUtil.copyProperties(job, JobDTO.class);
+            dto.setDistance(distance);
+            matched.add(dto);
+        }
+        if ("salary".equals(sort)) {
+            matched.sort(Comparator.comparing(JobDTO::getSalary,
+                    Comparator.nullsLast(Comparator.reverseOrder())));
+        } else if ("distance".equals(sort)) {
+            matched.sort(Comparator.comparingDouble(JobDTO::getDistance));
+        } else {
+            matched.sort(Comparator.comparing(JobDTO::getCreateTime).reversed());
+        }
+        long total = matched.size();
+        int from = Math.min((page - 1) * pageSize, matched.size());
+        int to = Math.min(from + pageSize, matched.size());
+        return Result.ok(matched.subList(from, to), total);
     }
 
     /**

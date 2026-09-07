@@ -10,6 +10,13 @@ export function getNearbyJobs(params) {
   return request.get('/job/nearby', { params })
 }
 
+// 统一岗位列表查询（关键词搜索 + 分类 + 薪资/距离筛选 + 排序 + 分页）
+// params: { keyword, categoryId, minSalary, maxSalary, x, y, maxDistance, sort, page, pageSize }
+// sort: latest 最新 / salary 薪资最高 / distance 距离最近（距离相关需同时传 x/y）
+export function getJobList(params) {
+  return request.get('/job/list', { params })
+}
+
 // 岗位详情
 export function getJobById(id) {
   return request.get(`/job/${id}`)

@@ -276,11 +276,13 @@ d:\linggong\
 - 修复两个交互缺陷：① 「只看附近」点开没岗位 —— 根因：种子数据 40 个岗位坐标全在北京，而「附近」用浏览器真实定位 + 默认 5km 半径，用户不在北京导致空列表。按用户选择改「固定演示坐标」：`Home.vue` 去掉 `navigator.geolocation`，改用固定北京市中心 (116.4074, 39.9042) 为圆心、半径 20km，任何位置都能看到附近岗位并按距离排序（真实项目改回 geolocation，代码留注释）。② 发布动态看不到 —— 根因：「动态」页是关注流（只读 feed:{自己} 收件箱），发布时只推粉丝、不推自己。修复：`BlogServiceImpl.publish` 额外把新动态推进作者自己收件箱，`Feed.vue` 对自己的动态隐藏「关注」按钮。`mvn compile` + `npm run build` 通过，附近搜索 curl 实测返回按距离排序岗位（6~13km）。**后端改动需重启、前端需硬刷新**。
 - 新增逆地理编码（高德）—— 用户反馈「发布岗位的工作定位显示经纬度，普通人看不懂」。修复 —— ① 后端新增 `CoordTransform`（WGS84→GCJ-02 坐标转换）、`IMapService`/`MapServiceImpl`（RestClient 代理调高德 regeo，Key 存 application.yml 不暴露前端）、`MapController`（GET /map/regeo，需登录）；② 前端新增 `api/map.js`，`PublishJob.vue` 定位成功后调 regeo 把坐标转成文字地址并自动填进「工作地址」、定位栏显示地址而非经纬度。`mvn compile` + `npm run build` 通过，curl 高德接口实测返回 formatted_address 正常。**后端改动需重启、前端需硬刷新**。
 
+- 基础功能补齐（岗位搜索/筛选/排序）—— 用户指出岗位列表缺「搜索、排序、筛选」等基本能力。后端新增 `utils/GeoUtil`（haversine 球面距离）、`IJobService.queryList` + `JobServiceImpl` 实现（统一列表查询：关键词 like + 分类 + 薪资区间 + 距离筛选 + 排序 latest/salary/distance + 分页；不涉及距离走 DB 排序分页，涉及距离查全量后在内存算距离过滤排序）、`JobController /job/list`；前端 `api/job.js` 加 `getJobList`、重写 `Home.vue`（顶部搜索框 + 分类 Tab 加「全部」+ van-dropdown-menu 排序/薪资/距离筛选，替换原「只看附近」开关；距离展示改为只要后端返回 distance 就显示）。`mvn compile` + `npm run build` 通过。**后端改动需重启、前端需硬刷新**。
+
 ### 🔄 进行中
-- 无（Phase 0–6 全部完成）。
+- 无。
 
 ### ⏭ 下一步
-- 无（项目功能 + 前端 + 种子数据全部完成，可自由体验；如继续可考虑：数据统计看板、前端骨架屏/懒加载、Docker 一键化后端部署等）。
+- 继续补齐基础功能：收藏岗位 → 求职登记/简历 → 消息通知（按之前选定的顺序，一次一步）；之后再做 AI 岗位推荐。
 
 ---
 
