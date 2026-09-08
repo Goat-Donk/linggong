@@ -163,6 +163,23 @@ CREATE TABLE IF NOT EXISTS `tb_wallet_log` (
     KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '钱包流水表';
 
+-- ---------- 13. 每日考勤表（打工人按天申请「到岗/下工」，雇主按日核销，构成计薪依据） ----------
+CREATE TABLE IF NOT EXISTS `tb_attendance` (
+    `id`          bigint      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `job_id`      bigint      NOT NULL COMMENT '岗位 id',
+    `worker_id`   bigint      NOT NULL COMMENT '打工人 id',
+    `work_date`   date        NOT NULL COMMENT '出勤日期',
+    `on_status`   tinyint     NOT NULL DEFAULT 0 COMMENT '到岗核销状态：0未申请 1待核销 2通过 3驳回',
+    `off_status`  tinyint     NOT NULL DEFAULT 0 COMMENT '下工核销状态：0未申请 1待核销 2通过 3驳回',
+    `on_time`     datetime    DEFAULT NULL COMMENT '到岗申请时间',
+    `off_time`    datetime    DEFAULT NULL COMMENT '下工申请时间',
+    `create_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_job_worker_date` (`job_id`, `worker_id`, `work_date`),
+    KEY `idx_worker` (`worker_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '每日考勤表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

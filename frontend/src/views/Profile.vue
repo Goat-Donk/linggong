@@ -64,6 +64,13 @@
         @click="$router.push('/employer-applications')"
       />
       <van-cell
+        v-if="userState.info?.role === 1"
+        title="考勤核销"
+        icon="clock-o"
+        is-link
+        @click="$router.push('/attendance/manage')"
+      />
+      <van-cell
         v-if="userState.info?.role === 0"
         title="我的报名"
         icon="orders-o"

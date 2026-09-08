@@ -27,6 +27,14 @@
           <span class="app-card__address">{{ app.address || '地址待定' }}</span>
           <span class="app-card__time">{{ formatDateTime(app.createTime) }}</span>
         </div>
+        <div
+          v-if="app.status === 1"
+          class="app-card__att"
+          @click.stop="$router.push(`/attendance/my?jobId=${app.jobId}`)"
+        >
+          <van-icon name="clock-o" />
+          <span>今日考勤 ›</span>
+        </div>
       </div>
 
       <van-empty v-if="finished && applications.length === 0" description="还没有报名记录" />
@@ -107,5 +115,15 @@ async function onLoad() {
 .app-card__time {
   margin-left: auto;
   color: var(--text-tertiary);
+}
+.app-card__att {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line, #ebedf0);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--brand-primary);
 }
 </style>

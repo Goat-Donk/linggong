@@ -77,6 +77,18 @@ const routes = [
     meta: { title: '审核报名', requiresAuth: true }
   },
   {
+    path: '/attendance/my',
+    name: 'attendanceMy',
+    component: () => import('@/views/AttendanceMy.vue'),
+    meta: { title: '我的考勤', requiresAuth: true }
+  },
+  {
+    path: '/attendance/manage',
+    name: 'attendanceManage',
+    component: () => import('@/views/AttendanceManage.vue'),
+    meta: { title: '考勤核销', requiresAuth: true }
+  },
+  {
     path: '/favorites',
     name: 'favorites',
     component: () => import('@/views/FavoriteList.vue'),
