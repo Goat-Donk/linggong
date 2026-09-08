@@ -286,11 +286,13 @@ d:\linggong\
 
 - Step2 钱包底座（履约闭环资金底座）—— [db.sql](d:/linggong/backend/src/main/resources/db.sql) 加表 11 `tb_wallet`（user_id 唯一 uk + balance 可用余额，元整数）+ 表 12 `tb_wallet_log`（type 充值/冻结/解冻/工资/服务费、amount±、balance_after、biz_id、remark），Docker 里已同步建表；后端：`Wallet`/`WalletLog` 实体、`WalletMapper`/`WalletLogMapper`、[WalletLogType](d:/linggong/backend/src/main/java/com/linggong/utils/WalletLogType.java) 类型常量（发岗冻结/工资结算后续复用）、`WalletLogDTO`、`IWalletService`+impl（me 自动开户；recharge 金额校验 + `setSql` 原子自增防并发丢更新 + 记流水；logs 按时间倒序分页）、`WalletController`（GET /wallet/me、POST /wallet/recharge、GET /wallet/logs；前缀不在匿名白名单、需登录，双角色可用）。前端：`api/wallet.js`、`Wallet.vue`（余额渐变卡 + 充值弹层快捷金额 + 资金流水 van-list 分页，入账绿/出账红）、路由 /wallet（requiresAuth）、[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 加「我的钱包」入口（双角色）。`mvn compile` + `npm run build` 通过；curl E2E：自动开户余额 0 → 充值 2000 余额/流水正确 → 负/0 金额被拒「充值金额需大于 0」→ 流水分页返回 → 匿名 401「请先登录」。**后端改动需重启、前端需硬刷新**。
 
+- Step3 发岗担保金冻结 —— 定 `salary`=日薪（元/天）语义，全站薪资展示统一 `¥X/天`（format.js formatSalary）；[db.sql](d:/linggong/backend/src/main/resources/db.sql) `tb_job` 加 `frozen_amount`（该岗位担保冻结总额，source of truth，Docker 已 ALTER 同步）+ `Job` 实体加字段；[JobServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobServiceImpl.java) publish/update 改 `@Transactional`：任务天数=起止跨自然日（taskDays，起止缺省按 1 天）、冻结额=日薪×名额×天数（freezeAmount），发岗前 `balanceOf` 预检余额不足即 fail（文案带明细），够则 `walletService.freeze`（FREEZE 流水）落库岗位；编辑按差额补冻/释放（先算 form+DB 现值快照的 newFreeze，**修复 hutool copyProperties 用 null 覆盖内存可选字段 → 漏填时间被误当 1 天**的真实缺陷：编辑不带起止时应沿用 DB 时间算天数），冻结失败抛异常回滚整次事务；[PublishJob.vue](d:/linggong/frontend/src/views/PublishJob.vue) 加「担保金冻结」cell-group（当前余额可点去充值、冻结额=日薪×人数×天数公式、余额足/不足红绿状态、10% 服务费口径说明）+「任务天数」预览 + onSubmit 前端前置校验。`mvn compile` + `npm run build` 通过；curl/DB E2E 账实核对：雇主(13810000000) 充值 2000 → 发布冻结 200（日薪100×2人×1天，余额 2000→1800 + FREEZE 流水）→ 大额薪资余额不足友好 fail（不落库）→ 缺 salary 走 @Valid 返回 Result.fail → 编辑 3 次冻结/补冻/释放差额正确 → 编辑漏填起止保留 2 天计算（50×1×2=100）→ 下架 fixture job43；全流水账实核对 充值+2000/−200/−150/+50/−300/+300 终值 1900 ✓；`COUNT WHERE salary IS NULL OR salary<=0 OR frozen_amount<0` = 0。**后端改动需重启、前端需硬刷新**。
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- Step3 发岗担保金冻结：定 `salary`=日薪（元/天）语义、任务天数=start~end 自然日、冻结=日薪×名额×天数，发岗时校验雇主余额够则冻结（WalletLogType.FREEZE + 余额不足 fail），发布页加「担保金冻结」提示与费用预览。
+- Step4 考勤：建 `tb_attendance`，打工人按天申请（上班打卡/下班打卡，跨天任务逐天记录），雇主按日审核，构成计薪依据（规则：上下班都过=1 天、只上班=0.5 天、缺勤=0）。
 
 ---
 

@@ -44,11 +44,14 @@ public class Job {
     /** 纬度 */
     private Double y;
 
-    /** 薪资（元），可空 */
+    /** 薪资（日薪，元/天），可空 */
     private Integer salary;
 
     /** 名额 */
     private Integer headcount;
+
+    /** 已担保冻结金额（元）：发布时冻结 = 日薪×名额×任务天数，编辑时按差额补冻/释放 */
+    private Integer frozenAmount;
 
     /** 开始时间 */
     private LocalDateTime startTime;

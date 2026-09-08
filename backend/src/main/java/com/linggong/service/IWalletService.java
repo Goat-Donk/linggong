@@ -27,4 +27,23 @@ public interface IWalletService extends IService<Wallet> {
      * 我的钱包流水（分页，按时间倒序）。
      */
     Result logs(Integer page, Integer pageSize);
+
+    /**
+     * 查询某用户可用余额（无钱包返回 0，不自动开户）。供发岗冻结前预检。
+     */
+    int balanceOf(Long userId);
+
+    /**
+     * 冻结担保金：从 userId 可用余额扣 amount 并记「冻结」流水；余额不足返回失败。
+     *
+     * <p>发岗冻结 / 编辑补冻走这里。bizId 传岗位 id，remark 说明用途。
+     */
+    Result freeze(Long userId, Long bizId, int amount, String remark);
+
+    /**
+     * 解冻退还：给 userId 可用余额加 amount 并记「解冻」流水。
+     *
+     * <p>编辑岗位下调担保金 / 结算后退还冻结剩余走这里。
+     */
+    Result unfreeze(Long userId, Long bizId, int amount, String remark);
 }

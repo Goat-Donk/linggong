@@ -40,8 +40,9 @@ public class JobFormDTO {
     @NotNull(message = "纬度不能为空")
     private Double y;
 
-    @Schema(description = "薪资（元），可空")
-    @Min(value = 0, message = "薪资不能为负")
+    @Schema(description = "日薪（元/天），担保冻结与结算都按它算，必填")
+    @NotNull(message = "日薪不能为空")
+    @Min(value = 1, message = "日薪至少为 1 元")
     private Integer salary;
 
     @Schema(description = "名额（至少 1）")

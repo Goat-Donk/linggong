@@ -36,7 +36,7 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
 
     @Override
     public Result me() {
-        return Result.ok(ensureWallet());
+        return Result.ok(ensureWallet(UserHolder.getUser().getId()));
     }
 
     @Override
@@ -48,17 +48,18 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
         if (amount > MAX_RECHARGE) {
             return Result.fail("单次充值不能超过 " + MAX_RECHARGE + " 元");
         }
-        Wallet wallet = ensureWallet();
+        Long userId = UserHolder.getUser().getId();
+        Wallet wallet = ensureWallet(userId);
         // 余额用 SQL 原子自增，避免「读-改-写」并发丢更新
         lambdaUpdate()
                 .setSql("balance = balance + " + amount)
                 .eq(Wallet::getId, wallet.getId())
                 .update();
         int after = getById(wallet.getId()).getBalance();
-        recordLog(wallet.getUserId(), WalletLogType.RECHARGE, amount, after, null, "模拟充值入账");
+        recordLog(userId, WalletLogType.RECHARGE, amount, after, null, "模拟充值入账");
         Wallet view = new Wallet();
         view.setId(wallet.getId());
-        view.setUserId(wallet.getUserId());
+        view.setUserId(userId);
         view.setBalance(after);
         return Result.ok(view);
     }
@@ -79,11 +80,52 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
         return Result.ok(dtos, result.getTotal());
     }
 
+    @Override
+    public int balanceOf(Long userId) {
+        Wallet wallet = lambdaQuery().eq(Wallet::getUserId, userId).one();
+        return wallet == null || wallet.getBalance() == null ? 0 : wallet.getBalance();
+    }
+
+    @Override
+    @Transactional
+    public Result freeze(Long userId, Long bizId, int amount, String remark) {
+        if (amount <= 0) {
+            return Result.fail("冻结金额需大于 0");
+        }
+        Wallet wallet = ensureWallet(userId);
+        if (wallet.getBalance() < amount) {
+            return Result.fail("可用余额不足，无法冻结 ¥" + amount
+                    + "（当前可用 ¥" + wallet.getBalance() + "，请先到「我的钱包」充值）");
+        }
+        lambdaUpdate()
+                .setSql("balance = balance - " + amount)
+                .eq(Wallet::getId, wallet.getId())
+                .update();
+        int after = getById(wallet.getId()).getBalance();
+        recordLog(userId, WalletLogType.FREEZE, -amount, after, bizId, remark);
+        return Result.ok(after);
+    }
+
+    @Override
+    @Transactional
+    public Result unfreeze(Long userId, Long bizId, int amount, String remark) {
+        if (amount <= 0) {
+            return Result.fail("解冻金额需大于 0");
+        }
+        Wallet wallet = ensureWallet(userId);
+        lambdaUpdate()
+                .setSql("balance = balance + " + amount)
+                .eq(Wallet::getId, wallet.getId())
+                .update();
+        int after = getById(wallet.getId()).getBalance();
+        recordLog(userId, WalletLogType.UNFREEZE, amount, after, bizId, remark);
+        return Result.ok(after);
+    }
+
     /**
-     * 取当前登录用户的钱包，不存在则自动开户（0 余额）。
+     * 取某用户的钱包，不存在则自动开户（0 余额）。
      */
-    private Wallet ensureWallet() {
-        Long userId = UserHolder.getUser().getId();
+    private Wallet ensureWallet(Long userId) {
         Wallet wallet = lambdaQuery().eq(Wallet::getUserId, userId).one();
         if (wallet == null) {
             wallet = new Wallet();

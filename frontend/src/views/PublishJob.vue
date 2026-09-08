@@ -48,8 +48,9 @@
           v-model="salaryText"
           name="salary"
           type="number"
-          label="薪资"
-          placeholder="元，留空为面议"
+          label="日薪"
+          placeholder="元/天，必填"
+          :rules="[{ required: true, message: '请填写日薪' }]"
         />
         <van-cell title="招聘名额" center>
           <van-stepper v-model="form.headcount" :min="1" :max="999" integer />
@@ -75,6 +76,18 @@
           placeholder="点击选择"
           @click="openTimePicker('end')"
         />
+        <van-cell title="任务天数" :value="`${taskDays} 天`" label="起止跨自然日；未填则按 1 天" />
+      </van-cell-group>
+
+      <van-cell-group inset title="担保金冻结">
+        <van-cell title="当前可用余额" :value="`¥${balance}`" label="点我去充值" is-link @click="$router.push('/wallet')" />
+        <van-cell title="冻结担保金" :value="`¥${freezeAmount}`" :label="freezeFormula" />
+        <van-cell
+          :title="balance >= freezeAmount ? '余额充足' : '余额不足'"
+          :value="balance >= freezeAmount ? '可直接发布' : '请先充值'"
+          :class="balance >= freezeAmount ? 'fee-ok' : 'fee-lack'"
+        />
+        <van-cell title="说明" label="发岗时从余额冻结 日薪×名额×天数 作为担保；结算时给打工人发工资、剩余退回，另按结算额抽 10% 服务费（雇主承担）" />
       </van-cell-group>
 
       <van-cell-group inset title="岗位描述（可选）">
@@ -126,6 +139,7 @@ import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
 import { publishJob } from '@/api/job'
 import { regeo } from '@/api/map'
+import { getMyWallet } from '@/api/wallet'
 import { userState } from '@/stores/user'
 
 const router = useRouter()
@@ -148,6 +162,22 @@ const salaryText = ref('')
 const startTimeText = ref('')
 const endTimeText = ref('')
 const submitting = ref(false)
+
+// 担保冻结预览：余额 + 任务天数 + 需冻结金额（后端同口径：日薪×名额×自然日天数）
+const balance = ref(0)
+const taskDays = computed(() => {
+  if (!form.startTime || !form.endTime) return 1
+  const start = form.startTime.slice(0, 10)
+  const end = form.endTime.slice(0, 10)
+  const diff = Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1
+  return Math.max(1, diff)
+})
+const dailySalary = computed(() => (salaryText.value ? Number(salaryText.value) : 0))
+const freezeAmount = computed(() => dailySalary.value * form.headcount * taskDays.value)
+const freezeFormula = computed(() => {
+  if (!dailySalary.value) return '填写日薪后计算'
+  return `日薪 ¥${dailySalary.value} × ${form.headcount} 人 × ${taskDays.value} 天`
+})
 
 const categories = ref([])
 const showCategoryPicker = ref(false)
@@ -173,6 +203,14 @@ const locationText = computed(() => {
 onMounted(async () => {
   const res = await getCategories()
   categories.value = res.data || []
+  if (isEmployer.value) {
+    try {
+      const w = await getMyWallet()
+      balance.value = w.data?.balance ?? 0
+    } catch (e) {
+      // 拉不到余额不影响填写，发布时后端仍会兜底校验
+    }
+  }
 })
 
 function onLocate() {
@@ -257,6 +295,15 @@ async function onSubmit() {
     showToast('请先获取工作定位')
     return
   }
+  const salaryNum = Number(salaryText.value)
+  if (!Number.isInteger(salaryNum) || salaryNum <= 0) {
+    showToast('日薪需为正整数（元/天）')
+    return
+  }
+  if (balance.value < freezeAmount.value) {
+    showToast(`可用余额不足：需冻结 ¥${freezeAmount.value}，当前 ¥${balance.value}`)
+    return
+  }
   submitting.value = true
   try {
     const payload = {
@@ -265,7 +312,7 @@ async function onSubmit() {
       address: form.address.trim() || null,
       x: form.x,
       y: form.y,
-      salary: salaryText.value === '' ? null : Number(salaryText.value),
+      salary: salaryNum,
       headcount: form.headcount,
       startTime: form.startTime,
       endTime: form.endTime,
@@ -275,7 +322,7 @@ async function onSubmit() {
     showSuccessToast('发布成功')
     router.replace(`/job/${res.data}`)
   } catch (e) {
-    // 失败提示已由 request.js Toast（非雇主 / 时间非法 / 校验失败等）
+    // 失败提示已由 request.js Toast（非雇主 / 时间非法 / 余额不足 / 校验失败等）
   } finally {
     submitting.value = false
   }
@@ -289,5 +336,11 @@ async function onSubmit() {
 }
 .submit {
   margin: 24px 16px;
+}
+.fee-ok :deep(.van-cell__title) {
+  color: var(--success, #07c160);
+}
+.fee-lack :deep(.van-cell__title) {
+  color: var(--danger);
 }
 </style>

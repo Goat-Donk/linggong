@@ -8,10 +8,10 @@ export function formatDistance(m) {
   return `${(m / 1000).toFixed(1)}km`
 }
 
-// 薪资（元）→ ¥120，空则「面议」
+// 日薪（元/天）→ ¥120/天，空则「面议」（薪资按日结算：担保冻结=日薪×名额×任务天数）
 export function formatSalary(salary) {
   if (salary == null) return '面议'
-  return `¥${salary}`
+  return `¥${salary}/天`
 }
 
 // 起止时间 → "09-06 ~ 09-08"（只取日期部分，空值兜底）
