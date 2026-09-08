@@ -73,6 +73,11 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
 
     @Override
     public Result apply(Long jobId) {
+        // 角色边界：只有打工人（role=0）能报名应聘，雇主不能去报名别人岗位
+        Integer role = UserHolder.getUser().getRole();
+        if (role == null || role != 0) {
+            return Result.fail("只有打工人可以报名");
+        }
         Long workerId = UserHolder.getUser().getId();
 
         // 1. 岗位校验：存在 + 上架 + 非本人发布

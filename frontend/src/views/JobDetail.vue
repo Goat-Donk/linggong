@@ -3,7 +3,7 @@
     <van-nav-bar title="岗位详情" left-arrow @click-left="$router.back()">
       <template #right>
         <van-icon
-          v-if="userState.token && job"
+          v-if="userState.token && job && userState.info?.role !== 1"
           :name="favorited ? 'star' : 'star-o'"
           :color="favorited ? '#ffb62b' : '#969799'"
           size="22"
@@ -168,6 +168,8 @@ const canApply = computed(() => {
   if (!job.value) return false
   if (applied.value) return false
   if (job.value.status !== 0) return false
+  // 雇主端不显示报名（后端也校验了「只有打工人可以报名」）
+  if (userState.info?.role === 1) return false
   if (userState.info && userState.info.id === job.value.employerId) return false
   return true
 })
@@ -176,6 +178,7 @@ const applyText = computed(() => {
   if (!job.value) return '报名'
   if (job.value.status !== 0) return '已下架'
   if (applied.value) return '已报名'
+  if (userState.info?.role === 1) return '雇主不能报名'
   if (userState.info && userState.info.id === job.value.employerId) return '自己发布的岗位'
   return '立即报名'
 })

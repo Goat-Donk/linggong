@@ -45,6 +45,11 @@ public class JobFavoriteServiceImpl extends ServiceImpl<JobFavoriteMapper, JobFa
 
     @Override
     public Result favorite(Long jobId, Boolean isFavorite) {
+        // 角色边界：收藏是打工人找活用的，雇主不能收藏岗位
+        Integer role = UserHolder.getUser().getRole();
+        if (role == null || role != 0) {
+            return Result.fail("只有打工人可以收藏岗位");
+        }
         Long userId = UserHolder.getUser().getId();
         String key = RedisConstants.JOB_FAVORITES_KEY + userId;
 

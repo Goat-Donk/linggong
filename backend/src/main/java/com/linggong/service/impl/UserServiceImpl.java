@@ -14,14 +14,10 @@ import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RegexUtils;
 import com.linggong.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -34,9 +30,6 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
-
-    /** 签到 key 的月份后缀格式：:yyyyMM（拼接成 sign:{userId}:{yyyyMM}） */
-    private static final DateTimeFormatter SIGN_MONTH_FORMATTER = DateTimeFormatter.ofPattern(":yyyyMM");
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -115,54 +108,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.opsForHash().putAll(tokenKey, beanToHash(fresh));
         stringRedisTemplate.expire(tokenKey, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
         UserHolder.saveUser(fresh);
-    }
-
-    @Override
-    public Result sign() {
-        // 1. 当前用户 + 当前日期
-        Long userId = UserHolder.getUser().getId();
-        LocalDateTime now = LocalDateTime.now();
-        String key = signKey(userId, now);
-        // 2. 今天是本月的第几天，offset = 天数 - 1（bitmap 从 0 开始）
-        int dayOfMonth = now.getDayOfMonth();
-        // 3. SETBIT key offset 1
-        stringRedisTemplate.opsForValue().setBit(key, dayOfMonth - 1L, true);
-        return Result.ok();
-    }
-
-    @Override
-    public Result signCount() {
-        Long userId = UserHolder.getUser().getId();
-        LocalDateTime now = LocalDateTime.now();
-        String key = signKey(userId, now);
-        int dayOfMonth = now.getDayOfMonth();
-        // BITFIELD key GET u{dayOfMonth} 0：取本月 1 号到今天的所有签到位（大端，今天落在最低位）
-        List<Long> result = stringRedisTemplate.opsForValue().bitField(
-                key,
-                BitFieldSubCommands.create()
-                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth))
-                        .valueAt(0));
-        if (result == null || result.isEmpty()) {
-            return Result.ok(0);
-        }
-        Long num = result.get(0);
-        if (num == null || num == 0) {
-            return Result.ok(0);
-        }
-        // 从最低位（今天）往前数连续 1 的个数
-        int count = 0;
-        while ((num & 1) != 0) {
-            count++;
-            num >>>= 1;
-        }
-        return Result.ok(count);
-    }
-
-    /**
-     * 拼接签到 key：sign:{userId}:{yyyyMM}。
-     */
-    private String signKey(Long userId, LocalDateTime now) {
-        return RedisConstants.USER_SIGN_KEY + userId + now.format(SIGN_MONTH_FORMATTER);
     }
 
     /**

@@ -282,11 +282,13 @@ d:\linggong\
 
 - 求职登记（简历 · 1:1 独立表）—— 打工人填一份与具体岗位无关的「求职主页」，供雇主在审核报名时点开查看（设计两次确认：独立表 `tb_worker_profile`、自填+雇主可看的完整闭环）。后端：db.sql 加表 10 `tb_worker_profile`（user_id 唯一键 uk_user_id + title/category_ids/skill_tags/salary_min/salary_max/work_time/location）、`WorkerProfile` 实体 / Mapper、`WorkerProfileFormDTO`/`WorkerProfileViewDTO`、`IWorkerProfileService`+impl（saveProfile 按 user_id **upsert 幂等**；viewProfile 拼 nickName/icon/role/age/gender + 期望分类名 categoryNames + **手机号脱敏 135****4338** + isSelf）、`WorkerProfileController`（PUT /worker-profile、GET /worker-profile/view/{userId}；前缀不在拦截器匿名白名单，全部需登录）。前端：`api/workerProfile.js`、`WorkerProfileEdit.vue`（分类勾选/技能标签文本转数组/日薪区间/出勤时段/区域，已有数据回填预填，必填与区间校验）、`WorkerProfileView.vue`（用户卡 + 登记信息卡 + 空态「TA 还没有填写」）、路由 `/worker-profile/edit` 与 `/view/:id`（requiresAuth）、`Profile.vue` 打工人菜单加「求职登记」入口（role=0）、`EmployerApplications.vue` 报名卡整行可点跳打工人求职主页。`mvn compile` + `npm run build` 通过；curl E2E（保存幂等/本人看/雇主看/脱敏/匿名 401）+ 浏览器冒烟（打工人填登记 → 雇主审核报名点开看主页、无登记显示空态）通过。
 
+- 杂项收敛（角色边界 + 废弃每日签到）—— 收雇主端菜单：[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 的「我的报名/我的收藏/求职登记」改为仅打工人(role=0)显示、删除无业务价值的「每日签到」卡片与相关逻辑；[JobDetail.vue](d:/linggong/frontend/src/views/JobDetail.vue) 收藏星对雇主隐藏、报名按钮雇主禁用（文案「雇主不能报名」）；后端报名 `apply`（JobApplicationServiceImpl）与收藏 `favorite`（JobFavoriteServiceImpl）加「仅打工人」角色校验，雇主调用返回明确错误；彻底移除签到链路（UserController `/user/sign`+`/user/sign/count`、IUserService/UserServiceImpl sign 实现、RedisConstants `USER_SIGN_KEY`、前端 api/user.js `sign/signCount`）。`mvn compile` + `npm run build` 通过；curl 验证：雇主收藏返回「只有打工人可以收藏岗位」、雇主报名返回「只有打工人可以报名」、`/user/sign` 已无有效处理器（405，不再 200）。
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- 岗位履约闭环（本期待设计/开发，用户已定方向）：① 角色边界收紧——雇主端菜单去掉「我的报名 / 我的收藏」等打工人专属项，后端报名 / 收藏接口加「仅打工人」角色校验；② 废弃现无业务价值的「每日签到」；③ **定位考勤**：已录用打工人按岗位坐标(x,y)半径内打卡，岗位可跨多天、**每天上下班各打一次**；④ **担保托管结算**：雇主发岗充值担保金（余额不足不能发岗）→ 录用冻结 → 任务最后一天结束后按 **日薪 × 有效出勤天数** 一次性结算入虚拟钱包、未出勤部分退回雇主；虚拟钱包 `tb_wallet` + 工资流水。先梳理出完整设计再动工。
+- Step2 钱包底座：`tb_wallet` / `tb_wallet_log` 建表（Docker 执行）+ 实体/Mapper/Service/Controller（开户 / 充值 / 余额 / 流水）+ 前端「我的钱包」页。前导：履约闭环已拍板方案 v2（考勤=打工人申请+雇主核销、结算=担保托管+雇主提前/到期兜底、结算抽成 10% 雇主承担、虚拟金额），详见项目记忆 linggong-flow-decisions。
 
 ---
 

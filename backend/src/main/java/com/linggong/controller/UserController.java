@@ -77,24 +77,6 @@ public class UserController {
     }
 
     /**
-     * 每日签到（Bitmap）。
-     */
-    @Operation(summary = "每日签到（Bitmap，幂等）")
-    @PostMapping("/sign")
-    public Result sign() {
-        return userService.sign();
-    }
-
-    /**
-     * 本月连续签到天数。
-     */
-    @Operation(summary = "本月连续签到天数")
-    @GetMapping("/sign/count")
-    public Result signCount() {
-        return userService.signCount();
-    }
-
-    /**
      * 查看他人主页（昵称 + 头像）。
      */
     @Operation(summary = "查看他人主页（昵称 + 头像）")
