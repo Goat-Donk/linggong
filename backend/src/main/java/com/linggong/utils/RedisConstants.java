@@ -53,6 +53,9 @@ public final class RedisConstants {
     /** 签到 key 前缀，完整 key = sign:{userId}:{yyyyMM}（Bitmap，offset=当月第几天-1） */
     public static final String USER_SIGN_KEY = "sign:";
 
+    /** 岗位收藏集合 key 前缀，完整 key = job:favorites:{userId}（Set，存收藏岗位 id） */
+    public static final String JOB_FAVORITES_KEY = "job:favorites:";
+
     private RedisConstants() {
     }
 }

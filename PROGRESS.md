@@ -278,11 +278,14 @@ d:\linggong\
 
 - 基础功能补齐（岗位搜索/筛选/排序）—— 用户指出岗位列表缺「搜索、排序、筛选」等基本能力。后端新增 `utils/GeoUtil`（haversine 球面距离）、`IJobService.queryList` + `JobServiceImpl` 实现（统一列表查询：关键词 like + 分类 + 薪资区间 + 距离筛选 + 排序 latest/salary/distance + 分页；不涉及距离走 DB 排序分页，涉及距离查全量后在内存算距离过滤排序）、`JobController /job/list`；前端 `api/job.js` 加 `getJobList`、重写 `Home.vue`（顶部搜索框 + 分类 Tab 加「全部」+ van-dropdown-menu 排序/薪资/距离筛选，替换原「只看附近」开关；距离展示改为只要后端返回 distance 就显示）。`mvn compile` + `npm run build` 通过。**后端改动需重启、前端需硬刷新**。
 
+- 基础功能补齐（收藏岗位）—— 照 tb_follow 的 DB+Redis 双写模式做收藏。后端：db.sql 加 `tb_job_favorite`（唯一键 uk_user_job 防重复收藏）、`JobFavorite` 实体 / `JobFavoriteMapper` / `JobFavoriteDTO`（收藏 + 岗位简要信息）、`IJobFavoriteService`+impl（收藏/取消幂等双写、Redis Set 判断是否已收藏、我的收藏分页含岗位信息且**展示已下架**——用户需要知道收藏的岗位下架了）、`JobFavoriteController`（PUT /job-favorite/{jobId}/{isFavorite}、GET /job-favorite/or/not/{jobId}、GET /job-favorite/my；前缀不在拦截器白名单，全部需登录）、`RedisConstants` 加 job:favorites: 前缀。前端：`api/favorite.js`、`JobDetail.vue` 导航栏右侧星标（登录可见，点亮/取消切换 toast）、`FavoriteList.vue` 收藏列表页（复用我的报名卡片结构，已下架标红 tag）、`Profile.vue` 加「我的收藏」入口、路由加 /favorites（requiresAuth）。`mvn compile` + `npm run build` 通过。**注意：tb_job_favorite 建表 SQL 因当时 Docker 未运行未在库里执行，启动 Docker 后需执行 db.sql 第 9 节建表再重启后端。**
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- 继续补齐基础功能：收藏岗位 → 求职登记/简历 → 消息通知（按之前选定的顺序，一次一步）；之后再做 AI 岗位推荐。
+- Docker 启动后：执行 tb_job_favorite 建表 → 重启后端 → 端到端验证收藏（收藏/取消/列表/幂等）。
+- 继续补齐基础功能：求职登记/简历 → 消息通知；之后做 AI 岗位推荐。
 
 ---
 

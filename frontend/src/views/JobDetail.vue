@@ -1,6 +1,16 @@
 <template>
   <div class="job-detail">
-    <van-nav-bar title="岗位详情" left-arrow @click-left="$router.back()" />
+    <van-nav-bar title="岗位详情" left-arrow @click-left="$router.back()">
+      <template #right>
+        <van-icon
+          v-if="userState.token && job"
+          :name="favorited ? 'star' : 'star-o'"
+          :color="favorited ? '#ffb62b' : '#969799'"
+          size="22"
+          @click="onToggleFavorite"
+        />
+      </template>
+    </van-nav-bar>
 
     <div v-if="!job && !loadFailed" class="loading">
       <van-loading size="24">加载中...</van-loading>
@@ -128,6 +138,7 @@ import { getJobById } from '@/api/job'
 import { getUserById } from '@/api/user'
 import { applyJob, getMyApplications, getEmployerApplications } from '@/api/application'
 import { getEvaluationsByJob, publishEvaluation } from '@/api/evaluation'
+import { favoriteJob, isFavorited } from '@/api/favorite'
 import { userState } from '@/stores/user'
 import { formatSalary, formatDateRange, formatRelativeTime } from '@/utils/format'
 
@@ -139,6 +150,9 @@ const publisher = ref(null)
 const applying = ref(false)
 const applied = ref(false)
 const loadFailed = ref(false)
+
+// 收藏状态
+const favorited = ref(false)
 
 // 互评相关状态
 const evaluations = ref([])
@@ -197,7 +211,33 @@ onMounted(async () => {
   if (userState.token && userState.info?.id !== job.value.employerId) {
     checkApplied()
   }
+  // 已登录：查是否已收藏（自己发布的岗位也允许收藏）
+  if (userState.token) {
+    checkFavorited()
+  }
 })
+
+// 查收藏状态：星标点亮
+async function checkFavorited() {
+  try {
+    const res = await isFavorited(job.value.id)
+    favorited.value = !!res.data
+  } catch (e) {
+    // 查不到收藏状态不影响浏览
+  }
+}
+
+// 切换收藏 / 取消收藏
+async function onToggleFavorite() {
+  const next = !favorited.value
+  try {
+    await favoriteJob(job.value.id, next)
+    favorited.value = next
+    showSuccessToast(next ? '已收藏' : '已取消收藏')
+  } catch (e) {
+    // 失败提示已由 request.js Toast
+  }
+}
 
 async function onApply() {
   if (!userState.token) {

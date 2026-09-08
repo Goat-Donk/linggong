@@ -109,6 +109,17 @@ CREATE TABLE IF NOT EXISTS `tb_blog` (
     KEY `idx_user` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '晒单动态表';
 
+-- ---------- 9. 岗位收藏表 ----------
+CREATE TABLE IF NOT EXISTS `tb_job_favorite` (
+    `id`          bigint   NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     bigint   NOT NULL COMMENT '收藏者 id',
+    `job_id`      bigint   NOT NULL COMMENT '岗位 id',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_job` (`user_id`, `job_id`),
+    KEY `idx_job` (`job_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '岗位收藏表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

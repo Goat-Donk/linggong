@@ -84,6 +84,12 @@
         @click="$router.push('/my-applications')"
       />
       <van-cell
+        title="我的收藏"
+        icon="star-o"
+        is-link
+        @click="$router.push('/favorites')"
+      />
+      <van-cell
         title="编辑资料"
         icon="setting-o"
         is-link
