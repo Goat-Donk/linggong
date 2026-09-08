@@ -280,12 +280,13 @@ d:\linggong\
 
 - 基础功能补齐（收藏岗位）—— 照 tb_follow 的 DB+Redis 双写模式做收藏。后端：db.sql 加 `tb_job_favorite`（唯一键 uk_user_job 防重复收藏）、`JobFavorite` 实体 / `JobFavoriteMapper` / `JobFavoriteDTO`（收藏 + 岗位简要信息）、`IJobFavoriteService`+impl（收藏/取消幂等双写、Redis Set 判断是否已收藏、我的收藏分页含岗位信息且**展示已下架**——用户需要知道收藏的岗位下架了）、`JobFavoriteController`（PUT /job-favorite/{jobId}/{isFavorite}、GET /job-favorite/or/not/{jobId}、GET /job-favorite/my；前缀不在拦截器白名单，全部需登录）、`RedisConstants` 加 job:favorites: 前缀。前端：`api/favorite.js`、`JobDetail.vue` 导航栏右侧星标（登录可见，点亮/取消切换 toast）、`FavoriteList.vue` 收藏列表页（复用我的报名卡片结构，已下架标红 tag）、`Profile.vue` 加「我的收藏」入口、路由加 /favorites（requiresAuth）。`mvn compile` + `npm run build` 通过。**注意：tb_job_favorite 建表 SQL 因当时 Docker 未运行未在库里执行，启动 Docker 后需执行 db.sql 第 9 节建表再重启后端。**
 
+- 求职登记（简历 · 1:1 独立表）—— 打工人填一份与具体岗位无关的「求职主页」，供雇主在审核报名时点开查看（设计两次确认：独立表 `tb_worker_profile`、自填+雇主可看的完整闭环）。后端：db.sql 加表 10 `tb_worker_profile`（user_id 唯一键 uk_user_id + title/category_ids/skill_tags/salary_min/salary_max/work_time/location）、`WorkerProfile` 实体 / Mapper、`WorkerProfileFormDTO`/`WorkerProfileViewDTO`、`IWorkerProfileService`+impl（saveProfile 按 user_id **upsert 幂等**；viewProfile 拼 nickName/icon/role/age/gender + 期望分类名 categoryNames + **手机号脱敏 135****4338** + isSelf）、`WorkerProfileController`（PUT /worker-profile、GET /worker-profile/view/{userId}；前缀不在拦截器匿名白名单，全部需登录）。前端：`api/workerProfile.js`、`WorkerProfileEdit.vue`（分类勾选/技能标签文本转数组/日薪区间/出勤时段/区域，已有数据回填预填，必填与区间校验）、`WorkerProfileView.vue`（用户卡 + 登记信息卡 + 空态「TA 还没有填写」）、路由 `/worker-profile/edit` 与 `/view/:id`（requiresAuth）、`Profile.vue` 打工人菜单加「求职登记」入口（role=0）、`EmployerApplications.vue` 报名卡整行可点跳打工人求职主页。`mvn compile` + `npm run build` 通过；curl E2E（保存幂等/本人看/雇主看/脱敏/匿名 401）+ 浏览器冒烟（打工人填登记 → 雇主审核报名点开看主页、无登记显示空态）通过。
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- Docker 启动后：执行 tb_job_favorite 建表 → 重启后端 → 端到端验证收藏（收藏/取消/列表/幂等）。
-- 继续补齐基础功能：求职登记/简历 → 消息通知；之后做 AI 岗位推荐。
+- 岗位履约闭环（本期待设计/开发，用户已定方向）：① 角色边界收紧——雇主端菜单去掉「我的报名 / 我的收藏」等打工人专属项，后端报名 / 收藏接口加「仅打工人」角色校验；② 废弃现无业务价值的「每日签到」；③ **定位考勤**：已录用打工人按岗位坐标(x,y)半径内打卡，岗位可跨多天、**每天上下班各打一次**；④ **担保托管结算**：雇主发岗充值担保金（余额不足不能发岗）→ 录用冻结 → 任务最后一天结束后按 **日薪 × 有效出勤天数** 一次性结算入虚拟钱包、未出勤部分退回雇主；虚拟钱包 `tb_wallet` + 工资流水。先梳理出完整设计再动工。
 
 ---
 

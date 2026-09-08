@@ -9,7 +9,7 @@
       @load="onLoad"
     >
       <div v-for="app in applications" :key="app.id" class="app-card">
-        <div class="app-card__head">
+        <div class="app-card__head" @click="goWorker(app.workerId)">
           <van-image
             v-if="app.workerIcon"
             round
@@ -19,7 +19,10 @@
           />
           <van-icon v-else name="contact" size="40" color="#c8c9cc" />
           <div class="app-card__worker">
-            <span class="app-card__name">{{ app.workerName || '未知用户' }}</span>
+            <span class="app-card__name">
+              {{ app.workerName || '未知用户' }}
+              <span class="app-card__hint">查看主页 ›</span>
+            </span>
             <span class="app-card__job">{{ app.jobName }}</span>
           </div>
           <van-tag :type="applyStatusType(app.status)">{{ formatApplyStatus(app.status) }}</van-tag>
@@ -41,6 +44,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { showSuccessToast } from 'vant'
 import {
   getEmployerApplications,
@@ -48,6 +52,8 @@ import {
   rejectApplication
 } from '@/api/application'
 import { formatApplyStatus, applyStatusType, formatDateTime } from '@/utils/format'
+
+const router = useRouter()
 
 const applications = ref([])
 const page = ref(1)
@@ -72,6 +78,13 @@ async function onLoad() {
     finished.value = true
   } finally {
     loading.value = false
+  }
+}
+
+// 查看报名人的求职主页（打工人简历）
+function goWorker(workerId) {
+  if (workerId) {
+    router.push(`/worker-profile/view/${workerId}`)
   }
 }
 
@@ -112,6 +125,10 @@ async function onReject(app) {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+}
+.app-card__head:active {
+  opacity: 0.7;
 }
 .app-card__worker {
   flex: 1;
@@ -123,6 +140,12 @@ async function onReject(app) {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.app-card__hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--brand-primary);
+  margin-left: 4px;
 }
 .app-card__job {
   font-size: 12px;

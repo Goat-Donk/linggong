@@ -120,6 +120,23 @@ CREATE TABLE IF NOT EXISTS `tb_job_favorite` (
     KEY `idx_job` (`job_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '岗位收藏表';
 
+-- ---------- 10. 求职登记表（打工人简历，与 tb_user 一对一） ----------
+CREATE TABLE IF NOT EXISTS `tb_worker_profile` (
+    `id`           bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`      bigint       NOT NULL COMMENT '关联打工人用户 id',
+    `title`        varchar(64)  NOT NULL DEFAULT '' COMMENT '求职意向一句话',
+    `category_ids` varchar(128) NOT NULL DEFAULT '' COMMENT '期望岗位分类 id（逗号分隔，可多选）',
+    `skill_tags`   varchar(255) NOT NULL DEFAULT '' COMMENT '技能标签（逗号分隔）',
+    `salary_min`   int          DEFAULT NULL COMMENT '期望日薪下限（元，可空）',
+    `salary_max`   int          DEFAULT NULL COMMENT '期望日薪上限（元，可空）',
+    `work_time`    varchar(128) NOT NULL DEFAULT '' COMMENT '可出勤时段（逗号分隔，可多选）',
+    `location`     varchar(255) NOT NULL DEFAULT '' COMMENT '常驻区域 / 可到岗地点',
+    `create_time`  datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`  datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '求职登记表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

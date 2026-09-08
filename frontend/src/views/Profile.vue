@@ -90,6 +90,13 @@
         @click="$router.push('/favorites')"
       />
       <van-cell
+        v-if="userState.info?.role === 0"
+        title="求职登记"
+        icon="contact"
+        is-link
+        @click="$router.push('/worker-profile/edit')"
+      />
+      <van-cell
         title="编辑资料"
         icon="setting-o"
         is-link

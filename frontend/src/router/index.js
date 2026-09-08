@@ -75,6 +75,18 @@ const routes = [
     name: 'favorites',
     component: () => import('@/views/FavoriteList.vue'),
     meta: { title: '我的收藏', requiresAuth: true }
+  },
+  {
+    path: '/worker-profile/edit',
+    name: 'workerProfileEdit',
+    component: () => import('@/views/WorkerProfileEdit.vue'),
+    meta: { title: '求职登记', requiresAuth: true }
+  },
+  {
+    path: '/worker-profile/view/:id',
+    name: 'workerProfileView',
+    component: () => import('@/views/WorkerProfileView.vue'),
+    meta: { title: '求职主页', requiresAuth: true }
   }
 ]
 
