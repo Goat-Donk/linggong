@@ -14,6 +14,14 @@ export function formatSalary(salary) {
   return `¥${salary}/天`
 }
 
+// 金额（元，精确到分）→ ¥900 / ¥50.50（整数省略小数，非整数保留两位）
+export function formatMoney(v) {
+  if (v == null || v === '') return '¥0'
+  const n = Number(v)
+  if (Number.isNaN(n)) return '¥0'
+  return '¥' + (Number.isInteger(n) ? String(n) : n.toFixed(2))
+}
+
 // 起止时间 → "09-06 ~ 09-08"（只取日期部分，空值兜底）
 export function formatDateRange(start, end) {
   const fmt = (s) => {

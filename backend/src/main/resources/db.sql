@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS `tb_job` (
     `y`           double        NOT NULL COMMENT '纬度',
     `salary`      int           DEFAULT NULL COMMENT '日薪（元/天）',
     `headcount`   int           NOT NULL DEFAULT 1 COMMENT '名额',
-    `frozen_amount` int         NOT NULL DEFAULT 0 COMMENT '已担保冻结金额（元，发岗时冻结=日薪×名额×任务天数）',
+    `frozen_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '已担保冻结金额（元，精确到分，发岗时冻结=日薪×名额×任务天数）',
     `start_time`  datetime      DEFAULT NULL COMMENT '开始时间',
     `end_time`    datetime      DEFAULT NULL COMMENT '结束时间',
     `description` varchar(1024) NOT NULL DEFAULT '' COMMENT '岗位描述',
@@ -140,25 +140,25 @@ CREATE TABLE IF NOT EXISTS `tb_worker_profile` (
 
 -- ---------- 11. 虚拟钱包表（每人一个，balance=可用余额；担保冻结/工资结算都走这里） ----------
 CREATE TABLE IF NOT EXISTS `tb_wallet` (
-    `id`          bigint      NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `user_id`     bigint      NOT NULL COMMENT '关联用户 id（雇主/打工人共用）',
-    `balance`     int         NOT NULL DEFAULT 0 COMMENT '可用余额（元，整数）',
-    `create_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `id`          bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     bigint        NOT NULL COMMENT '关联用户 id（雇主/打工人共用）',
+    `balance`     decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '可用余额（元，精确到分）',
+    `create_time` datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '虚拟钱包表';
 
 -- ---------- 12. 钱包流水表（充值/冻结/解冻/工资/服务费） ----------
 CREATE TABLE IF NOT EXISTS `tb_wallet_log` (
-    `id`            bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `user_id`       bigint       NOT NULL COMMENT '关联用户 id（谁的钱变动了）',
-    `type`          varchar(32)  NOT NULL COMMENT '类型：充值/冻结/解冻/工资/服务费',
-    `amount`        int          NOT NULL COMMENT '变动金额（正=入账，负=出账）',
-    `balance_after` int          NOT NULL COMMENT '变动后余额',
-    `biz_id`        bigint       DEFAULT NULL COMMENT '关联业务 id（如岗位/报名），可为空',
-    `remark`        varchar(255) NOT NULL DEFAULT '' COMMENT '备注',
-    `create_time`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `id`            bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`       bigint        NOT NULL COMMENT '关联用户 id（谁的钱变动了）',
+    `type`          varchar(32)   NOT NULL COMMENT '类型：充值/冻结/解冻/工资/服务费',
+    `amount`        decimal(10,2) NOT NULL COMMENT '变动金额（元，正=入账，负=出账，精确到分）',
+    `balance_after` decimal(10,2) NOT NULL COMMENT '变动后余额（元，精确到分）',
+    `biz_id`        bigint        DEFAULT NULL COMMENT '关联业务 id（如岗位/结算单），可为空',
+    `remark`        varchar(255)  NOT NULL DEFAULT '' COMMENT '备注',
+    `create_time`   datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '钱包流水表';
@@ -179,6 +179,37 @@ CREATE TABLE IF NOT EXISTS `tb_attendance` (
     UNIQUE KEY `uk_job_worker_date` (`job_id`, `worker_id`, `work_date`),
     KEY `idx_worker` (`worker_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '每日考勤表';
+
+-- ---------- 14. 岗位结算单（job_id 唯一 = 结算幂等锚点；一岗一单，落单即结算完成） ----------
+CREATE TABLE IF NOT EXISTS `tb_job_settlement` (
+    `id`            bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `job_id`        bigint        NOT NULL COMMENT '岗位 id（一岗仅一单）',
+    `employer_id`   bigint        NOT NULL COMMENT '雇主 id',
+    `trigger_type`  tinyint       NOT NULL DEFAULT 0 COMMENT '触发来源：0手动提前结算 1到期自动结算',
+    `gross_wage`    decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '实际发给工人的工资总额（元）',
+    `service_fee`   decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '向雇主钱包另扣的平台服务费（元，=工资×10%）',
+    `refund_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '退回雇主钱包的冻结余款（元）',
+    `settled_at`    datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '结算完成时间',
+    `create_time`   datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`   datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_job` (`job_id`),
+    KEY `idx_employer` (`employer_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '岗位结算单表';
+
+-- ---------- 15. 结算工人明细（逐人快照：出勤半天数 + 实发工资，账务可追溯） ----------
+CREATE TABLE IF NOT EXISTS `tb_job_settlement_item` (
+    `id`              bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `settlement_id`   bigint        NOT NULL COMMENT '所属结算单 id',
+    `application_id`  bigint        NOT NULL COMMENT '已完成报名记录 id（雪花 id）',
+    `worker_id`       bigint        NOT NULL COMMENT '打工人 id',
+    `paid_half_days`  int           NOT NULL DEFAULT 0 COMMENT '已付半天数：2=1天 1=半天',
+    `wage_amount`     decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '工资金额（元，精确到分）',
+    `create_time`     datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_settlement` (`settlement_id`),
+    KEY `idx_worker` (`worker_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '结算工人明细表';
 
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）

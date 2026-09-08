@@ -16,6 +16,7 @@ import com.linggong.entity.User;
 import com.linggong.mapper.AttendanceMapper;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
+import com.linggong.mapper.JobSettlementMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IAttendanceService;
 import com.linggong.utils.UserHolder;
@@ -59,13 +60,16 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
 
     private final JobMapper jobMapper;
     private final JobApplicationMapper jobApplicationMapper;
+    private final JobSettlementMapper jobSettlementMapper;
     private final UserMapper userMapper;
 
     public AttendanceServiceImpl(JobMapper jobMapper,
                                  JobApplicationMapper jobApplicationMapper,
+                                 JobSettlementMapper jobSettlementMapper,
                                  UserMapper userMapper) {
         this.jobMapper = jobMapper;
         this.jobApplicationMapper = jobApplicationMapper;
+        this.jobSettlementMapper = jobSettlementMapper;
         this.userMapper = userMapper;
     }
 
@@ -79,6 +83,9 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
         Job job = requireJob(jobId);
         if (job == null) {
             return Result.fail("岗位不存在");
+        }
+        if (isSettled(jobId)) {
+            return Result.fail("该岗位已结算，考勤已锁定");
         }
         Long workerId = UserHolder.getUser().getId();
         LocalDate today = LocalDate.now();
@@ -122,6 +129,9 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
         Job job = requireJob(jobId);
         if (job == null) {
             return Result.fail("岗位不存在");
+        }
+        if (isSettled(jobId)) {
+            return Result.fail("该岗位已结算，考勤已锁定");
         }
         Long workerId = UserHolder.getUser().getId();
         LocalDate today = LocalDate.now();
@@ -302,6 +312,9 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
         if (!job.getEmployerId().equals(UserHolder.getUser().getId())) {
             return Result.fail("只能核销自己发布岗位的考勤");
         }
+        if (isSettled(dto.getJobId())) {
+            return Result.fail("该岗位已结算，考勤已锁定");
+        }
         LocalDate day = parseDay(dto.getWorkDate());
         if (day == null) {
             return Result.fail("日期格式不正确，应为 yyyy-MM-dd");
@@ -349,6 +362,9 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
         }
         if (!job.getEmployerId().equals(UserHolder.getUser().getId())) {
             return Result.fail("只能核销自己发布岗位的考勤");
+        }
+        if (isSettled(dto.getJobId())) {
+            return Result.fail("该岗位已结算，考勤已锁定");
         }
         LocalDate day = parseDay(dto.getWorkDate());
         if (day == null) {
@@ -402,6 +418,11 @@ public class AttendanceServiceImpl extends ServiceImpl<AttendanceMapper, Attenda
 
     private Job requireJob(Long jobId) {
         return jobId == null ? null : jobMapper.selectById(jobId);
+    }
+
+    /** 岗位是否已结算（结算后考勤不可再打卡/核销/补记）。 */
+    private boolean isSettled(Long jobId) {
+        return jobSettlementMapper.selectByJobId(jobId) != null;
     }
 
     private boolean isHired(Long jobId, Long workerId) {

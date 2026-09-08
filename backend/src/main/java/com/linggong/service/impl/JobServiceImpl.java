@@ -10,12 +10,14 @@ import com.linggong.dto.Result;
 import com.linggong.dto.UserDTO;
 import com.linggong.entity.Job;
 import com.linggong.mapper.JobMapper;
+import com.linggong.mapper.JobSettlementMapper;
 import com.linggong.service.IJobService;
 import com.linggong.service.IWalletService;
 import com.linggong.utils.CacheClient;
 import com.linggong.utils.GeoUtil;
 import com.linggong.utils.JobBloomFilter;
 import com.linggong.utils.RedisConstants;
+import com.linggong.utils.TaskDaysUtil;
 import com.linggong.utils.UserHolder;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
@@ -28,7 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.temporal.ChronoUnit;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -58,13 +60,16 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
     private final JobBloomFilter jobBloomFilter;
     private final StringRedisTemplate stringRedisTemplate;
     private final IWalletService walletService;
+    private final JobSettlementMapper jobSettlementMapper;
 
     public JobServiceImpl(CacheClient cacheClient, JobBloomFilter jobBloomFilter,
-                          StringRedisTemplate stringRedisTemplate, IWalletService walletService) {
+                          StringRedisTemplate stringRedisTemplate, IWalletService walletService,
+                          JobSettlementMapper jobSettlementMapper) {
         this.cacheClient = cacheClient;
         this.jobBloomFilter = jobBloomFilter;
         this.stringRedisTemplate = stringRedisTemplate;
         this.walletService = walletService;
+        this.jobSettlementMapper = jobSettlementMapper;
     }
 
     @Override
@@ -84,12 +89,13 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         job.setEmployerId(user.getId());
         job.setStatus(0);
         // 4. 担保金预检：日薪×名额×任务天数，余额不够直接拒绝（不落库）
-        int freeze = freezeAmount(job);
-        int balance = walletService.balanceOf(user.getId());
-        if (balance < freeze) {
-            return Result.fail("可用余额不足：发布需冻结担保金 ¥" + freeze
+        BigDecimal freeze = freezeAmount(job);
+        BigDecimal balance = walletService.balanceOf(user.getId());
+        if (balance.compareTo(freeze) < 0) {
+            return Result.fail("可用余额不足：发布需冻结担保金 ¥" + money(freeze)
                     + "（日薪 ¥" + job.getSalary() + " × " + job.getHeadcount() + " 人 × "
-                    + taskDays(job) + " 天），当前可用 ¥" + balance + "，请先到「我的钱包」充值");
+                    + TaskDaysUtil.taskDays(job) + " 天），当前可用 ¥" + money(balance)
+                    + "，请先到「我的钱包」充值");
         }
         job.setFrozenAmount(freeze);
         save(job);
@@ -120,6 +126,9 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         if (timeInvalid(form)) {
             return Result.fail("结束时间不能早于开始时间");
         }
+        if (jobSettlementMapper.selectByJobId(id) != null) {
+            return Result.fail("岗位已结算，不能编辑");
+        }
         // 记录旧分类，用于从旧 GEO 集合移除（copyProperties 后 categoryId 可能已变）
         Long oldCategoryId = job.getCategoryId();
         // 担保差额：用「form 有则用 form、缺则沿用 DB 现值」的快照算新冻结额。
@@ -130,14 +139,14 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         effective.setHeadcount(form.getHeadcount() != null ? form.getHeadcount() : job.getHeadcount());
         effective.setStartTime(form.getStartTime() != null ? form.getStartTime() : job.getStartTime());
         effective.setEndTime(form.getEndTime() != null ? form.getEndTime() : job.getEndTime());
-        int oldFreeze = job.getFrozenAmount() == null ? 0 : job.getFrozenAmount();
-        int newFreeze = freezeAmount(effective);
-        int delta = newFreeze - oldFreeze;
-        if (delta > 0) {
-            int balance = walletService.balanceOf(userId);
-            if (balance < delta) {
-                return Result.fail("可用余额不足：本次调整需补冻结担保金 ¥" + delta
-                        + "，当前可用 ¥" + balance + "，请先到「我的钱包」充值");
+        BigDecimal oldFreeze = job.getFrozenAmount() == null ? BigDecimal.ZERO : job.getFrozenAmount();
+        BigDecimal newFreeze = freezeAmount(effective);
+        BigDecimal delta = newFreeze.subtract(oldFreeze);
+        if (delta.signum() > 0) {
+            BigDecimal balance = walletService.balanceOf(userId);
+            if (balance.compareTo(delta) < 0) {
+                return Result.fail("可用余额不足：本次调整需补冻结担保金 ¥" + money(delta)
+                        + "，当前可用 ¥" + money(balance) + "，请先到「我的钱包」充值");
             }
         }
         // form 不含 id/employerId/status/createTime，copyProperties 不会覆盖这些字段；
@@ -146,13 +155,13 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         job.setFrozenAmount(newFreeze);
         updateById(job);
         // 按差额调整冻结：上调补冻、下调释放（同一事务，失败回滚整次编辑）
-        if (delta > 0) {
+        if (delta.signum() > 0) {
             Result r = walletService.freeze(userId, id, delta, "编辑岗位担保金上调「" + job.getName() + "」");
             if (!Boolean.TRUE.equals(r.getSuccess())) {
                 throw new IllegalStateException("补冻担保金失败，编辑已回滚");
             }
-        } else if (delta < 0) {
-            walletService.unfreeze(userId, id, -delta, "编辑岗位担保金下调「" + job.getName() + "」，退回差额");
+        } else if (delta.signum() < 0) {
+            walletService.unfreeze(userId, id, delta.negate(), "编辑岗位担保金下调「" + job.getName() + "」，退回差额");
         }
         // 删缓存，保证详情下次查询读到最新数据（缓存一致性）
         cacheClient.delete(RedisConstants.CACHE_JOB_KEY + id);
@@ -172,6 +181,9 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         }
         if (!job.getEmployerId().equals(UserHolder.getUser().getId())) {
             return Result.fail("只能下架自己发布的岗位");
+        }
+        if (jobSettlementMapper.selectByJobId(id) != null) {
+            return Result.fail("岗位已结算，无需重复下架");
         }
         job.setStatus(1);
         updateById(job);
@@ -379,26 +391,20 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
     }
 
     /**
-     * 任务天数 = 起止时间跨的自然日数；未填起止/只填一个时按 1 天（当日一次性任务）。
-     * 例：09-06 08:00 ～ 09-07 18:00 → 2 天。
+     * 担保冻结金额 = 日薪 × 名额 × 任务天数（BigDecimal，精确到分）。薪资/名额异常时返回 0。
      */
-    private int taskDays(Job job) {
-        if (job.getStartTime() == null || job.getEndTime() == null) {
-            return 1;
-        }
-        long days = ChronoUnit.DAYS.between(job.getStartTime().toLocalDate(), job.getEndTime().toLocalDate()) + 1;
-        return days < 1 ? 1 : (int) Math.min(days, Integer.MAX_VALUE);
-    }
-
-    /**
-     * 担保冻结金额 = 日薪 × 名额 × 任务天数。薪资/名额异常时返回 0（正常发布时恒 > 0）。
-     */
-    private int freezeAmount(Job job) {
+    private BigDecimal freezeAmount(Job job) {
         if (job.getSalary() == null || job.getSalary() <= 0
                 || job.getHeadcount() == null || job.getHeadcount() <= 0) {
-            return 0;
+            return BigDecimal.ZERO;
         }
-        long amount = (long) job.getSalary() * job.getHeadcount() * taskDays(job);
-        return amount >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) amount;
+        return BigDecimal.valueOf(job.getSalary())
+                .multiply(BigDecimal.valueOf(job.getHeadcount()))
+                .multiply(BigDecimal.valueOf(TaskDaysUtil.taskDays(job)));
+    }
+
+    /** 金额展示：去掉多余的 0（900.00 → 900，50.50 → 50.50）。 */
+    private String money(BigDecimal amount) {
+        return amount.stripTrailingZeros().toPlainString();
     }
 }

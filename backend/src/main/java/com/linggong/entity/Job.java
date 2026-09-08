@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -50,8 +51,8 @@ public class Job {
     /** 名额 */
     private Integer headcount;
 
-    /** 已担保冻结金额（元）：发布时冻结 = 日薪×名额×任务天数，编辑时按差额补冻/释放 */
-    private Integer frozenAmount;
+    /** 已担保冻结金额（元，精确到分）：发布时冻结 = 日薪×名额×任务天数 */
+    private BigDecimal frozenAmount;
 
     /** 开始时间 */
     private LocalDateTime startTime;

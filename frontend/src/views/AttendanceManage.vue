@@ -37,6 +37,25 @@
         <van-cell title="是否任务期内" :value="day.inPeriod ? '是' : '否'" :value-class="day.inPeriod ? '' : 'cell-off'" />
       </van-cell-group>
 
+      <!-- 结算概览 -->
+      <van-cell-group v-if="settlement" inset class="block">
+        <van-cell
+          title="结算状态"
+          :value="settlement.settled ? '已结算' : '待结算'"
+          :value-class="settlement.settled ? '' : 'cell-warn'"
+        />
+        <van-cell title="担保冻结" :value="formatMoney(settlement.frozenAmount)" />
+        <van-cell title="应发工资" :value="formatMoney(settlement.grossWage)" />
+        <van-cell title="平台服务费（10%）" :value="formatMoney(settlement.serviceFee)" />
+        <van-cell title="退回冻结余款" :value="formatMoney(settlement.refundAmount)" />
+      </van-cell-group>
+      <div v-if="settlement && !settlement.settled" class="settle-actions">
+        <van-button round block type="primary" :loading="settling" @click="onSettle">
+          结算本岗位
+        </van-button>
+        <p class="settle-tip">结算后按考勤核销计薪，岗位结束不再招聘</p>
+      </div>
+
       <div class="worker-list">
         <div v-for="row in day.rows" :key="row.workerId" class="worker-card">
           <div class="worker-card__head">
@@ -52,8 +71,9 @@
             <template v-if="row.offTime"> · {{ formatDateTime(row.offTime) }}</template>
           </div>
           <div class="worker-card__actions">
+            <span v-if="settlement && settlement.settled" class="action-hint">已结算，考勤已锁定</span>
             <!-- 到岗待核销 -->
-            <template v-if="row.onStatus === 1">
+            <template v-else-if="row.onStatus === 1">
               <van-button size="small" type="success" plain :loading="auditing" @click="audit(row, 'on', true)">到岗通过</van-button>
               <van-button size="small" type="danger" plain :loading="auditing" @click="audit(row, 'on', false)">到岗驳回</van-button>
             </template>
@@ -90,15 +110,16 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showSuccessToast } from 'vant'
+import { showConfirmDialog, showSuccessToast } from 'vant'
 import {
   getAttendanceJobs,
   getJobAttendance,
   auditAttendance,
   confirmAttendanceOff
 } from '@/api/attendance'
+import { getSettlementDetail, settleJob } from '@/api/settlement'
 import { userState } from '@/stores/user'
-import { formatSalary, formatDateRange, formatDateTime } from '@/utils/format'
+import { formatSalary, formatDateRange, formatDateTime, formatMoney } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -118,6 +139,10 @@ const pickerValue = ref([])
 const minDate = ref(new Date(2020, 0, 1))
 const maxDate = ref(new Date(2035, 11, 31))
 const auditing = ref(false)
+
+// 结算概览
+const settlement = ref(null)
+const settling = ref(false)
 
 const onBack = () => {
   if (inBoard.value) {
@@ -198,6 +223,39 @@ async function confirm(row) {
   }
 }
 
+async function loadSettlement(jobId) {
+  settlement.value = null
+  try {
+    const res = await getSettlementDetail(jobId)
+    settlement.value = res.data
+  } catch (e) {
+    // 失败已 Toast（非本人岗位等）
+  }
+}
+
+async function onSettle() {
+  const jobId = route.query.jobId
+  try {
+    await showConfirmDialog({
+      title: '确认结算该岗位？',
+      message: '结算将按考勤核销结果计薪发工资、扣 10% 服务费、退回冻结余款，岗位结束后不可再编辑或核销。'
+    })
+  } catch (e) {
+    return // 用户取消
+  }
+  settling.value = true
+  try {
+    await settleJob(jobId)
+    showSuccessToast('结算成功')
+    await loadSettlement(jobId)
+    await loadDay(jobId)
+  } catch (e) {
+    // 失败已 Toast（余额不足付服务费等）
+  } finally {
+    settling.value = false
+  }
+}
+
 // 状态文案
 const punchLabel = (s) => ({ 0: '未申请', 1: '待核销', 2: '已通过', 3: '已驳回' }[s] ?? '—')
 
@@ -215,6 +273,7 @@ watch(
     if (jobId) {
       date.value = ''
       loadDay(jobId)
+      loadSettlement(jobId)
     } else if (!jobsLoadedOnce.value) {
       loadJobs()
     }
@@ -233,6 +292,17 @@ watch(
 }
 .cell-off {
   color: var(--danger);
+}
+.cell-warn {
+  color: var(--warning, #ff976a);
+}
+.settle-actions {
+  margin: 12px 12px 0;
+}
+.settle-tip {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 .job-item {
   margin: 12px 12px 0;

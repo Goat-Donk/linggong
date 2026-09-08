@@ -3,6 +3,8 @@ package com.linggong.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 /**
  * 钱包流水返回 DTO（前端「我的钱包」流水列表用）。
  *
@@ -19,11 +21,11 @@ public class WalletLogDTO {
     /** 流水类型：充值/冻结/解冻/工资/服务费 */
     private String type;
 
-    /** 变动金额（正=入账，负=出账） */
-    private Integer amount;
+    /** 变动金额（元，正=入账，负=出账，精确到分） */
+    private BigDecimal amount;
 
-    /** 变动后余额 */
-    private Integer balanceAfter;
+    /** 变动后余额（元，精确到分） */
+    private BigDecimal balanceAfter;
 
     /** 关联业务 id（可为空） */
     private Long bizId;

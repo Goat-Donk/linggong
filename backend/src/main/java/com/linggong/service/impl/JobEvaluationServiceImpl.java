@@ -80,11 +80,13 @@ public class JobEvaluationServiceImpl extends ServiceImpl<JobEvaluationMapper, J
         } else {
             return Result.fail("只能评价该岗位的雇佣对方");
         }
+        // 互评资格：报名须已「已完成」(status=2)，即该岗位已结算，雇佣闭环成立后才可互评
         Long applyCount = jobApplicationMapper.selectCount(new LambdaQueryWrapper<JobApplication>()
                 .eq(JobApplication::getJobId, jobId)
-                .eq(JobApplication::getWorkerId, workerId));
+                .eq(JobApplication::getWorkerId, workerId)
+                .eq(JobApplication::getStatus, 2));
         if (applyCount == null || applyCount == 0) {
-            return Result.fail("该工人未报名此岗位");
+            return Result.fail("该岗位尚未结算，暂不能评价");
         }
 
         // 4. 防重复评价：同一岗位同一评价人只评一次

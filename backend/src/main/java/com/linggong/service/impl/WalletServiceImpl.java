@@ -15,18 +15,22 @@ import com.linggong.utils.WalletLogType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * 虚拟钱包服务实现。
+ *
+ * <p>金额口径：全部 BigDecimal（元，两位小数）。余额变动用 SQL 原子加减
+ * （decimal 列上的 + / - 不产生超出两位的精度），变动后回读落流水 balance_after。
  */
 @Service
 public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> implements IWalletService {
 
     /** 单次充值上限（元），防手滑大额 */
-    private static final int MAX_RECHARGE = 1_000_000;
+    private static final BigDecimal MAX_RECHARGE = new BigDecimal("1000000");
 
     private final WalletLogMapper walletLogMapper;
 
@@ -45,18 +49,19 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
         if (amount == null || amount <= 0) {
             return Result.fail("充值金额需大于 0");
         }
-        if (amount > MAX_RECHARGE) {
-            return Result.fail("单次充值不能超过 " + MAX_RECHARGE + " 元");
+        BigDecimal value = BigDecimal.valueOf(amount);
+        if (value.compareTo(MAX_RECHARGE) > 0) {
+            return Result.fail("单次充值不能超过 " + MAX_RECHARGE.stripTrailingZeros().toPlainString() + " 元");
         }
         Long userId = UserHolder.getUser().getId();
         Wallet wallet = ensureWallet(userId);
         // 余额用 SQL 原子自增，避免「读-改-写」并发丢更新
         lambdaUpdate()
-                .setSql("balance = balance + " + amount)
+                .setSql("balance = balance + " + value.toPlainString())
                 .eq(Wallet::getId, wallet.getId())
                 .update();
-        int after = getById(wallet.getId()).getBalance();
-        recordLog(userId, WalletLogType.RECHARGE, amount, after, null, "模拟充值入账");
+        BigDecimal after = getById(wallet.getId()).getBalance();
+        recordLog(userId, WalletLogType.RECHARGE, value, after, null, "模拟充值入账");
         Wallet view = new Wallet();
         view.setId(wallet.getId());
         view.setUserId(userId);
@@ -81,45 +86,99 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
     }
 
     @Override
-    public int balanceOf(Long userId) {
+    public BigDecimal balanceOf(Long userId) {
         Wallet wallet = lambdaQuery().eq(Wallet::getUserId, userId).one();
-        return wallet == null || wallet.getBalance() == null ? 0 : wallet.getBalance();
+        return wallet == null || wallet.getBalance() == null ? BigDecimal.ZERO : wallet.getBalance();
     }
 
     @Override
     @Transactional
-    public Result freeze(Long userId, Long bizId, int amount, String remark) {
-        if (amount <= 0) {
-            return Result.fail("冻结金额需大于 0");
+    public Result freeze(Long userId, Long bizId, BigDecimal amount, String remark) {
+        Result check = positive(amount);
+        if (check != null) {
+            return check;
         }
         Wallet wallet = ensureWallet(userId);
-        if (wallet.getBalance() < amount) {
-            return Result.fail("可用余额不足，无法冻结 ¥" + amount
-                    + "（当前可用 ¥" + wallet.getBalance() + "，请先到「我的钱包」充值）");
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            return Result.fail("可用余额不足，无法冻结 ¥" + money(amount)
+                    + "（当前可用 ¥" + money(wallet.getBalance()) + "，请先到「我的钱包」充值）");
         }
         lambdaUpdate()
-                .setSql("balance = balance - " + amount)
+                .setSql("balance = balance - " + amount.toPlainString())
                 .eq(Wallet::getId, wallet.getId())
                 .update();
-        int after = getById(wallet.getId()).getBalance();
-        recordLog(userId, WalletLogType.FREEZE, -amount, after, bizId, remark);
+        BigDecimal after = getById(wallet.getId()).getBalance();
+        recordLog(userId, WalletLogType.FREEZE, amount.negate(), after, bizId, remark);
         return Result.ok(after);
     }
 
     @Override
     @Transactional
-    public Result unfreeze(Long userId, Long bizId, int amount, String remark) {
-        if (amount <= 0) {
-            return Result.fail("解冻金额需大于 0");
+    public Result unfreeze(Long userId, Long bizId, BigDecimal amount, String remark) {
+        Result check = positive(amount);
+        if (check != null) {
+            return check;
         }
         Wallet wallet = ensureWallet(userId);
         lambdaUpdate()
-                .setSql("balance = balance + " + amount)
+                .setSql("balance = balance + " + amount.toPlainString())
                 .eq(Wallet::getId, wallet.getId())
                 .update();
-        int after = getById(wallet.getId()).getBalance();
+        BigDecimal after = getById(wallet.getId()).getBalance();
         recordLog(userId, WalletLogType.UNFREEZE, amount, after, bizId, remark);
         return Result.ok(after);
+    }
+
+    @Override
+    @Transactional
+    public Result settleSalary(Long workerId, Long bizId, BigDecimal amount, String remark) {
+        Result check = positive(amount);
+        if (check != null) {
+            return check;
+        }
+        Wallet wallet = ensureWallet(workerId);
+        lambdaUpdate()
+                .setSql("balance = balance + " + amount.toPlainString())
+                .eq(Wallet::getId, wallet.getId())
+                .update();
+        BigDecimal after = getById(wallet.getId()).getBalance();
+        recordLog(workerId, WalletLogType.SALARY, amount, after, bizId, remark);
+        return Result.ok(after);
+    }
+
+    @Override
+    @Transactional
+    public Result chargeServiceFee(Long employerId, Long bizId, BigDecimal amount, String remark) {
+        Result check = positive(amount);
+        if (check != null) {
+            return check;
+        }
+        Wallet wallet = ensureWallet(employerId);
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            return Result.fail("可用余额不足以支付服务费 ¥" + money(amount)
+                    + "（当前可用 ¥" + money(wallet.getBalance()) + "，请先到「我的钱包」充值）");
+        }
+        lambdaUpdate()
+                .setSql("balance = balance - " + amount.toPlainString())
+                .eq(Wallet::getId, wallet.getId())
+                .update();
+        BigDecimal after = getById(wallet.getId()).getBalance();
+        recordLog(employerId, WalletLogType.SERVICE_FEE, amount.negate(), after, bizId, remark);
+        return Result.ok(after);
+    }
+
+    // ---------- 私有辅助 ----------
+
+    /** 金额校验：非空且大于 0。返回 null 表示通过，否则为失败 Result。 */
+    private Result positive(BigDecimal amount) {
+        return amount != null && amount.compareTo(BigDecimal.ZERO) > 0
+                ? null
+                : Result.fail("金额需大于 0");
+    }
+
+    /** 金额展示：去掉多余的 0（900.00 → 900，50.50 → 50.50）。 */
+    private String money(BigDecimal amount) {
+        return amount.stripTrailingZeros().toPlainString();
     }
 
     /**
@@ -130,7 +189,7 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
         if (wallet == null) {
             wallet = new Wallet();
             wallet.setUserId(userId);
-            wallet.setBalance(0);
+            wallet.setBalance(BigDecimal.ZERO);
             save(wallet);
         }
         return wallet;
@@ -139,7 +198,8 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
     /**
      * 记一条余额变动流水。
      */
-    private void recordLog(Long userId, String type, int amount, int balanceAfter, Long bizId, String remark) {
+    private void recordLog(Long userId, String type, BigDecimal amount, BigDecimal balanceAfter,
+                           Long bizId, String remark) {
         WalletLog log = new WalletLog();
         log.setUserId(userId);
         log.setType(type);
