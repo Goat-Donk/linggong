@@ -284,11 +284,13 @@ d:\linggong\
 
 - 杂项收敛（角色边界 + 废弃每日签到）—— 收雇主端菜单：[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 的「我的报名/我的收藏/求职登记」改为仅打工人(role=0)显示、删除无业务价值的「每日签到」卡片与相关逻辑；[JobDetail.vue](d:/linggong/frontend/src/views/JobDetail.vue) 收藏星对雇主隐藏、报名按钮雇主禁用（文案「雇主不能报名」）；后端报名 `apply`（JobApplicationServiceImpl）与收藏 `favorite`（JobFavoriteServiceImpl）加「仅打工人」角色校验，雇主调用返回明确错误；彻底移除签到链路（UserController `/user/sign`+`/user/sign/count`、IUserService/UserServiceImpl sign 实现、RedisConstants `USER_SIGN_KEY`、前端 api/user.js `sign/signCount`）。`mvn compile` + `npm run build` 通过；curl 验证：雇主收藏返回「只有打工人可以收藏岗位」、雇主报名返回「只有打工人可以报名」、`/user/sign` 已无有效处理器（405，不再 200）。
 
+- Step2 钱包底座（履约闭环资金底座）—— [db.sql](d:/linggong/backend/src/main/resources/db.sql) 加表 11 `tb_wallet`（user_id 唯一 uk + balance 可用余额，元整数）+ 表 12 `tb_wallet_log`（type 充值/冻结/解冻/工资/服务费、amount±、balance_after、biz_id、remark），Docker 里已同步建表；后端：`Wallet`/`WalletLog` 实体、`WalletMapper`/`WalletLogMapper`、[WalletLogType](d:/linggong/backend/src/main/java/com/linggong/utils/WalletLogType.java) 类型常量（发岗冻结/工资结算后续复用）、`WalletLogDTO`、`IWalletService`+impl（me 自动开户；recharge 金额校验 + `setSql` 原子自增防并发丢更新 + 记流水；logs 按时间倒序分页）、`WalletController`（GET /wallet/me、POST /wallet/recharge、GET /wallet/logs；前缀不在匿名白名单、需登录，双角色可用）。前端：`api/wallet.js`、`Wallet.vue`（余额渐变卡 + 充值弹层快捷金额 + 资金流水 van-list 分页，入账绿/出账红）、路由 /wallet（requiresAuth）、[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 加「我的钱包」入口（双角色）。`mvn compile` + `npm run build` 通过；curl E2E：自动开户余额 0 → 充值 2000 余额/流水正确 → 负/0 金额被拒「充值金额需大于 0」→ 流水分页返回 → 匿名 401「请先登录」。**后端改动需重启、前端需硬刷新**。
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- Step2 钱包底座：`tb_wallet` / `tb_wallet_log` 建表（Docker 执行）+ 实体/Mapper/Service/Controller（开户 / 充值 / 余额 / 流水）+ 前端「我的钱包」页。前导：履约闭环已拍板方案 v2（考勤=打工人申请+雇主核销、结算=担保托管+雇主提前/到期兜底、结算抽成 10% 雇主承担、虚拟金额），详见项目记忆 linggong-flow-decisions。
+- Step3 发岗担保金冻结：定 `salary`=日薪（元/天）语义、任务天数=start~end 自然日、冻结=日薪×名额×天数，发岗时校验雇主余额够则冻结（WalletLogType.FREEZE + 余额不足 fail），发布页加「担保金冻结」提示与费用预览。
 
 ---
 

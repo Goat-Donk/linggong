@@ -59,6 +59,12 @@ const routes = [
     meta: { title: '发布岗位', requiresAuth: true }
   },
   {
+    path: '/wallet',
+    name: 'wallet',
+    component: () => import('@/views/Wallet.vue'),
+    meta: { title: '我的钱包', requiresAuth: true }
+  },
+  {
     path: '/my-applications',
     name: 'myApplications',
     component: () => import('@/views/MyApplications.vue'),

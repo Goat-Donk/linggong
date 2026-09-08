@@ -137,6 +137,31 @@ CREATE TABLE IF NOT EXISTS `tb_worker_profile` (
     UNIQUE KEY `uk_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '求职登记表';
 
+-- ---------- 11. 虚拟钱包表（每人一个，balance=可用余额；担保冻结/工资结算都走这里） ----------
+CREATE TABLE IF NOT EXISTS `tb_wallet` (
+    `id`          bigint      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     bigint      NOT NULL COMMENT '关联用户 id（雇主/打工人共用）',
+    `balance`     int         NOT NULL DEFAULT 0 COMMENT '可用余额（元，整数）',
+    `create_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '虚拟钱包表';
+
+-- ---------- 12. 钱包流水表（充值/冻结/解冻/工资/服务费） ----------
+CREATE TABLE IF NOT EXISTS `tb_wallet_log` (
+    `id`            bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`       bigint       NOT NULL COMMENT '关联用户 id（谁的钱变动了）',
+    `type`          varchar(32)  NOT NULL COMMENT '类型：充值/冻结/解冻/工资/服务费',
+    `amount`        int          NOT NULL COMMENT '变动金额（正=入账，负=出账）',
+    `balance_after` int          NOT NULL COMMENT '变动后余额',
+    `biz_id`        bigint       DEFAULT NULL COMMENT '关联业务 id（如岗位/报名），可为空',
+    `remark`        varchar(255) NOT NULL DEFAULT '' COMMENT '备注',
+    `create_time`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '钱包流水表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

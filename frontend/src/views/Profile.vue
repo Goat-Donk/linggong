@@ -44,6 +44,12 @@
         @click="$router.push('/my-blogs')"
       />
       <van-cell
+        title="我的钱包"
+        icon="gold-coin-o"
+        is-link
+        @click="$router.push('/wallet')"
+      />
+      <van-cell
         v-if="userState.info?.role === 1"
         title="发布岗位"
         icon="plus"
