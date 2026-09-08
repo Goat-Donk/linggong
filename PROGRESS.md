@@ -292,11 +292,13 @@ d:\linggong\
 
 - Step5 结算引擎（履约闭环资金闭环 + 抽成）—— 金额精度先补齐：`tb_wallet.balance`、`tb_wallet_log.amount/balance_after`、`tb_job.frozen_amount` 全改 `decimal(10,2)`，钱包记账全改 `BigDecimal`（半天工资/10% 服务费精确到分，`HALF_UP`）。[db.sql](d:/linggong/backend/src/main/resources/db.sql) 加表 14 `tb_job_settlement`（job_id 唯一键 uk_job = 幂等锚点，employer_id/trigger_type 0手动1自动/gross_wage/service_fee/refund_amount/settled_at）+ 表 15 `tb_job_settlement_item`（逐工人快照 application_id/worker_id/paid_half_days/wage_amount）。后端：`JobSettlement`/`JobSettlementItem` 实体、`JobSettlementMapper`（selectByJobId + selectExpiredUnsettledJobs 扫到期未结算）、`SettlementItemDTO`/`SettlementDetailDTO`、`ISettlementService`+`SettlementServiceImpl`（**结算核心**：`settleInternal` 幂等检查→`compute` 计薪（halfDays=上+下都过2/仅上过1/否则0，工资=日薪×半天÷2，单人封顶任务天数×2 保证退款不为负；服务费=工资总额×10% 从雇主**可用余额**另扣、冻结池只覆盖工资；退款=冻结额−工资总额）→服务费余额预检（不足即 fail 零副作用）→落结算单→逐人 settleSalary 发工资+落明细→chargeServiceFee 扣服务费→unfreeze 退余款→报名 1→2→岗位下架+清零冻结额+删缓存/GEO；`@Transactional` + `@Lazy` 自代理 `self` 保证 autoSettleExpired 逐岗结算走事务；`@EnableScheduling`+`@Scheduled(fixedRate=60s,initialDelay=30s)` 到期自动兜底，失败留待下轮重试）、`SettlementController`（GET /settlement/detail 预览/回显、POST /settlement/settle 手动结算，仅雇主+岗位归属校验）。**业务封口**：`JobServiceImpl` 编辑/下架前查结算单「岗位已结算」拒绝；`AttendanceServiceImpl` 打卡/核销/补记前查结算单「考勤已锁定」拒绝；`JobEvaluationServiceImpl` 互评资格收紧为报名 **status=2（已完成）** 才可评（原「曾报名」过宽）；报名 `apply` 已由岗位 status=1（结算后下架）天然拦截。前端：`api/settlement.js`、`AttendanceManage.vue` 加「结算概览」cell-group（结算状态/担保冻结/应发工资/服务费/退款 + 「结算本岗位」按钮 + 结算后隐藏核销按钮）、`format.js` 加 `formatMoney`（¥整数省小数/非整数保留两位）。**修复 1 处真实缺陷**：结算预览接口未结算时 gross/serviceFee/refund 返回 0（未传计算值），已改为 `toDetailPreview` 回填实时重算金额。`mvn compile` + `npm run build` 通过；curl E2E 全通过：① 预览 job44（3 工人 2 满勤 1 驳回）→ gross=200/fee=20/refund=700；② 手动结算 → 雇主 1000→1680（扣 20 费+退 700）、W50 2000→2100、W15 自动开户 100、W19 零出勤 0、报名全 2、岗位 status=1、结算主子表金额正确、三类流水（工资/服务费/退款）齐全；③ 重复结算幂等「已结算」、工人越权「只有雇主」；④ 半分精度 job46（日薪99 仅到岗）→ 工资 49.50/服务费 4.95/退款 49.50、冻结清零 0；⑤ 自动结算兜底 trigger_type=1 抢跑成功；⑥ 0 出勤全额退款 job47（无人录用）refund=160 全退；⑦ 服务费不足（fee2000>余额1884）友好 fail 且零状态变化（无结算单/不改报名/余额不变）；⑧ 已结算岗位核销/补记均「考勤已锁定」。**后端改动需重启、前端需硬刷新**。
 
+- Step6 全链路 E2E 收尾 —— 用「发岗→报名→审核→考勤→结算→互评」完整闭环跑通履约资金链路：雇主陈志强(13810000000) 发岗 job49（日薪100×1人×1天，冻结100，余额 1884.55→1784.55）→ 打工人阿禾(13581043338) 报名（雪花单号）→ 雇主审核录用（报名 0→1）→ 工人到岗/下工 + 雇主逐次核销（满勤 1 天，on=2/off=2）→ 雇主结算（预览 gross=100/fee=10/refund=0 → 落单：雇主 1784.55→1774.55 扣 10 服务费、工人 2149.50→2249.50 发 100 工资、报名 1→2、岗位下架 status=1、冻结清零 0）→ 双方互评（阿禾评陈志强 + 陈志强评阿禾，评价列表 2 条）。负例：未结算岗位(job43) 互评被拒「该岗位尚未结算，暂不能评价」。数据收尾：清理 Step5 幻影岗位 job48、修正 job44 冻结额清零（修复前已结算的残留），最终账实一致（已结算岗位冻结额均为 0）。**项目整体完成。**
+
 ### 🔄 进行中
 - 无。
 
 ### ⏭ 下一步
-- Step6 全链路 E2E 收尾：重建干净数据后跑「发岗→报名→审核→考勤→结算→互评」端到端闭环，更新 PROGRESS.md 收尾并中文提交推送。
+- 无（项目整体完成）。
 
 ---
 
