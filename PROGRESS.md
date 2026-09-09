@@ -314,11 +314,13 @@ d:\linggong\
 
 - 信用治理 Step4 雇主审核报名可见工人信用分 + 放鸽子标记（撮合透明度）—— **用户拍板口径**：放鸽子 = 工人「已录用后单方放弃(quit)」；报名后自撤待确认(0→3)与雇主取消录用不计入。[db.sql](d:/linggong/backend/src/main/resources/db.sql) `tb_user_info` 加 `break_count`（int NOT NULL DEFAULT 0，Docker 已 ALTER 同步）。后端：`UserInfo` 实体加 breakCount；[UserInfoMapper](d:/linggong/backend/src/main/java/com/linggong/mapper/UserInfoMapper.java) 加 `incrementBreakCount`（`INSERT ... ON DUPLICATE KEY UPDATE` 原子 upsert：有资料行计数 +1，无资料行按默认信用 100 建行计数置 1；**不数信用流水**——信用已被 clamp 到 0 时 adjustCredit 不记流水会漏计）；[IUserInfoService](d:/linggong/backend/src/main/java/com/linggong/service/IUserInfoService.java)+impl 加 `incrementBreakCount` + `batchByUserIds`（批量取资料行防 N+1）；[JobApplicationServiceImpl.breakHire](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobApplicationServiceImpl.java) 仅在工人 quit（workerQuit）路径计数（雇主 dismiss 是雇主责任不计）；employerApplications 组装时批量回填报名人信用分/放鸽子次数；[EmployerApplicationDTO](d:/linggong/backend/src/main/java/com/linggong/dto/EmployerApplicationDTO.java) 加 `workerCredit`（无资料行按默认 100）+ `breakCount`（默认 0）。前端：[EmployerApplications.vue](d:/linggong/frontend/src/views/EmployerApplications.vue) 每条报名卡工人名下方加「信用 N」彩色 tag（<60 红 = 与服务端 CreditRules.LOW_CREDIT 一致 / 60~79 橙 / ≥80 绿）+ `breakCount>0` 时红字「放鸽子 ×N」tag + 顶部说明行。`mvn compile` + `npm run build` 通过。E2E 全通过（已清理）：雇主 51 审核列表 worker101 各行均回 workerCredit=87/breakCount=0、无缺失字段；无资料行工人（52/100/102/103/104）均回 100/0（新人不误伤）；101 报名 job208 → 雇主录用 → 101 quit：信用 87→77、break_count 0→1、信用流水 BREAK_HIRE −10（remark「放弃已录用岗位…」）、名额自动复原；101 再报名 job208（待确认行）→ 列表该行 workerCredit=77/breakCount=1（标记在待审核行生效）；清理后全复原（两条测试报名删、信用流水删、信用 87/break 0、job208 headcount 6、通知回 max 19、redis 名额键复原）。**后端改动需重启、前端需硬刷新**。
 
+- 整体回归联调（信用治理四步 + 后端重建后的全站回归）—— 无代码改动，纯验证（后端 PID 45600 当前版本，前端 `npm run build` ✓ 5.00s）。**只读冒烟矩阵 48 项：46 PASS + 2 守卫正确**（匿名浏览 13 项全过：分类/列表最新·翻页·薪资·距离(坐标)/关键词/分类页/附近 GEO/岗位详情/评价列表/越权 401；worker101 20 项全过：身份/信用/钱包/我的报名·收藏·通知·聊天/动态/考勤/关注/查雇主；employer51 13 项全过：发岗汇总/信用/钱包/审核列表含 workerCredit·breakCount 双字段全非空/结算预览；负例 D1/D2：雇主报名/收藏被业务拦截）。**考勤两接口 `/attendance/jobs`+`/job` 仅雇主**：worker 调正确返回「只有雇主可以核销考勤」（守卫正确，非缺陷），雇主 51 调返回其进行中岗位 job241 与 job246 日视图。**信用治理四个面功能复核**：① 曝光降权活体验证（受控可逆）：emp13（韩梅 100 分 2 上架岗）临时改 credit=40 → 默认「最新」列表其岗位从 idx [32,53] 沉底到 [60,61]（tail 全为 emp13，sunk=True），复原 100 → 精确回到 [32,53]（total 恒 62，全量无缓存）；② 雇主审核列表字段：C11 全行 workerCredit/breakCount 均有值；③ 拉黑链路：add(15 阿强)→重复 add 被「已拉黑」拦→列表含 15→remove→列表复原空，全程静默（tb_notification 计数不变）；④ 通知已读：read-all 后 unread W/E=0，已按 SQL 快照恢复 51/101 未读（7~19）。**写冒烟 19 项 18 PASS + 1 环境噪音**：收藏 toggle 真实验证 add→my 列表含→or/not true→取消→my 列表空（干净复现全链路一致）；唯一 F4 失败定位为**历史手工清理残留的 Redis/DB 漂移**（favorite:101 集合残留 member 而 DB 无行 → 幂等 Redis 守卫短路不补插），非产品缺陷，现已双清一致（redis SCARD=0、DB=0）。钱包/信用分前后核对：51=1903.00/90·0、101=140.00/87·0 全程不变；信用流水表、黑名单表清空复原；人工留档报名 900000000000000105 完好。**结论：全站只读/守卫/核心链路回归通过，无回归缺陷。**（遗留：git 未跟踪的 `tools/chat_demo_data.sql` 为早年聊天演示数据导出，非本次产生。）
+
 ### 🔄 进行中
-- 无（信用治理四项清单全部完成）。
+- 无（整体回归联调已完成，无回归缺陷）。
 
 ### ⏭ 下一步
-- 无明确下一项。信用治理 Step1~4（信用流水 / 雇主低信用曝光降权 / 雇主拉黑打工人 / 雇主审核见信用分与放鸽子标记）已全部完成并 E2E 验证。可做：整体回归联调，或按用户新需求进入下一功能。
+- 无明确下一项。信用治理 Step1~4 与全站回归联调均完成，项目处于稳定可展示状态。按用户新需求进入下一功能。
 
 ---
 
