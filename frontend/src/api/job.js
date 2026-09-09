@@ -33,6 +33,11 @@ export function getMyJobs(page, pageSize) {
   return request.get('/job/my', { params: { page, pageSize } })
 }
 
+// 我的经营汇总（仅雇主）：data { totalJobs, hiringJobs, frozenAmount, settledJobs, totalServiceFee }
+export function getMyJobSummary() {
+  return request.get('/job/my-summary')
+}
+
 // 编辑岗位（仅发布者本人），form 同发布
 export function updateJob(id, form) {
   return request.put(`/job/${id}`, form)

@@ -33,6 +33,25 @@
       </div>
     </div>
 
+    <!-- 收入汇总（仅打工人：工资/提现口径） -->
+    <div v-if="isWorker" class="income-card">
+      <div class="income-card__title">收入汇总</div>
+      <div class="income-grid">
+        <div class="income-item">
+          <span class="income-item__label">累计到账工资</span>
+          <span class="income-item__value">{{ formatMoney(income.totalIncome) }}</span>
+        </div>
+        <div class="income-item">
+          <span class="income-item__label">本月到账工资</span>
+          <span class="income-item__value">{{ formatMoney(income.monthIncome) }}</span>
+        </div>
+        <div class="income-item">
+          <span class="income-item__label">累计提现</span>
+          <span class="income-item__value">{{ formatMoney(income.totalWithdraw) }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 流水列表 -->
     <div class="logs-head">
       <span>资金流水</span>
@@ -103,9 +122,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { showSuccessToast, showToast } from 'vant'
-import { getMyWallet, rechargeWallet, withdrawWallet, getWalletLogs } from '@/api/wallet'
-import { formatDateTime } from '@/utils/format'
+import { getMyWallet, rechargeWallet, withdrawWallet, getWalletLogs, getWalletSummary } from '@/api/wallet'
+import { userState } from '@/stores/user'
+import { formatDateTime, formatMoney } from '@/utils/format'
 
+const isWorker = computed(() => userState.info?.role === 0)
+const income = ref({})
 const balance = ref(0)
 const logs = ref([])
 const page = ref(1)
@@ -138,6 +160,17 @@ async function loadBalance() {
     balance.value = res.data?.balance ?? 0
   } catch (e) {
     // 失败提示已由 request.js Toast
+  }
+}
+
+// 收入汇总（仅打工人展示）
+async function loadIncome() {
+  if (!isWorker.value) return
+  try {
+    const res = await getWalletSummary()
+    income.value = res.data || {}
+  } catch (e) {
+    // 失败静默：统计卡为空不影响余额与流水
   }
 }
 
@@ -190,6 +223,7 @@ async function onLoad() {
 }
 
 loadBalance()
+loadIncome()
 </script>
 
 <style scoped>
@@ -235,6 +269,41 @@ loadBalance()
 }
 .balance-card__btn {
   border-color: rgba(255, 255, 255, 0.6);
+}
+.income-card {
+  margin: 12px 12px 0;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.income-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.income-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 8px;
+  margin-top: 12px;
+}
+.income-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.income-item__label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.income-item__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .logs-head {
   display: flex;

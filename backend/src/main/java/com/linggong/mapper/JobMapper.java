@@ -3,7 +3,10 @@ package com.linggong.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.linggong.entity.Job;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+
+import java.math.BigDecimal;
 
 /**
  * 岗位 Mapper。基础 CRUD 由 MyBatis-Plus 提供。
@@ -28,4 +31,11 @@ public interface JobMapper extends BaseMapper<Job> {
      */
     @Update("UPDATE tb_job SET headcount = headcount + 1 WHERE id = #{jobId}")
     int restoreHeadcount(@Param("jobId") Long jobId);
+
+    /**
+     * 汇总某雇主当前仍在岗的担保冻结金额（结算会清零 frozen_amount，
+     * 因此该值 = 未结算岗位的冻结款之和，含已下架未结算的岗位）。
+     */
+    @Select("SELECT COALESCE(SUM(frozen_amount), 0) FROM tb_job WHERE employer_id = #{employerId}")
+    BigDecimal sumFrozenByEmployer(@Param("employerId") Long employerId);
 }

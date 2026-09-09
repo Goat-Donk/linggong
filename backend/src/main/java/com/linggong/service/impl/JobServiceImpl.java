@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.linggong.dto.EmployerSummaryDTO;
 import com.linggong.dto.JobDTO;
 import com.linggong.dto.JobFormDTO;
 import com.linggong.dto.JobMyDTO;
@@ -395,6 +396,29 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
             return dto;
         }).collect(Collectors.toList());
         return Result.ok(dtos, pageResult.getTotal());
+    }
+
+    @Override
+    public Result employerSummary() {
+        UserDTO user = UserHolder.getUser();
+        if (user == null || user.getRole() == null || user.getRole() != 1) {
+            return Result.fail("只有雇主可以查看经营汇总");
+        }
+        Long employerId = user.getId();
+        EmployerSummaryDTO dto = new EmployerSummaryDTO();
+        // 累计发岗：全部状态（含已下架 / 已结算）
+        dto.setTotalJobs(lambdaQuery().eq(Job::getEmployerId, employerId).count());
+        // 招聘中：仍上架（status=0）
+        dto.setHiringJobs(lambdaQuery().eq(Job::getEmployerId, employerId)
+                .eq(Job::getStatus, 0).count());
+        // 担保冻结中：未结算岗位的冻结款合计（结算会清零 frozen_amount）
+        dto.setFrozenAmount(baseMapper.sumFrozenByEmployer(employerId));
+        // 已结算岗位 + 累计服务费：都来自结算单
+        dto.setSettledJobs(jobSettlementMapper.selectCount(
+                new LambdaQueryWrapper<JobSettlement>()
+                        .eq(JobSettlement::getEmployerId, employerId)));
+        dto.setTotalServiceFee(jobSettlementMapper.sumServiceFeeByEmployer(employerId));
+        return Result.ok(dto);
     }
 
     /** 统计指定岗位集合下某种报名状态的数量，返回 jobId → count 映射。 */

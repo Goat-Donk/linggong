@@ -5,6 +5,36 @@
     <van-empty v-if="!isEmployer" description="仅雇主可查看岗位" />
 
     <template v-else>
+      <!-- 经营汇总条 -->
+      <div class="summary-card">
+        <div class="summary-card__title">
+          <span>经营汇总</span>
+          <span class="summary-card__hint">担保冻结中 = 未结算岗位的保证金</span>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-item__label">累计发岗</span>
+            <span class="summary-item__value">{{ summary.totalJobs ?? 0 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-item__label">招聘中</span>
+            <span class="summary-item__value">{{ summary.hiringJobs ?? 0 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-item__label">冻结担保</span>
+            <span class="summary-item__value">{{ formatMoney(summary.frozenAmount) }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-item__label">已结算岗位</span>
+            <span class="summary-item__value">{{ summary.settledJobs ?? 0 }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-item__label">累计服务费</span>
+            <span class="summary-item__value">{{ formatMoney(summary.totalServiceFee) }}</span>
+          </div>
+        </div>
+      </div>
+
       <van-list
         v-model:loading="loading"
         :finished="finished"
@@ -62,13 +92,14 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast } from 'vant'
-import { getMyJobs, offShelfJob } from '@/api/job'
+import { getMyJobs, offShelfJob, getMyJobSummary } from '@/api/job'
 import { userState } from '@/stores/user'
 import { formatSalary, formatDateRange, formatMoney } from '@/utils/format'
 
 const router = useRouter()
 const isEmployer = computed(() => userState.info?.role === 1)
 
+const summary = ref({})
 const jobs = ref([])
 const page = ref(1)
 const pageSize = 10
@@ -100,6 +131,18 @@ async function onLoad() {
   }
 }
 
+// 经营汇总条：进页拉一次（仅雇主）
+async function loadSummary() {
+  if (!isEmployer.value) return
+  try {
+    const res = await getMyJobSummary()
+    summary.value = res.data || {}
+  } catch (e) {
+    // 失败静默：汇总条为空不影响列表
+  }
+}
+loadSummary()
+
 function onEdit(job) {
   router.push({ path: '/publish', query: { edit: job.id } })
 }
@@ -130,6 +173,49 @@ async function onOffShelf(job) {
 .my-jobs {
   min-height: 100vh;
   padding-bottom: 24px;
+}
+.summary-card {
+  margin: 12px 12px 0;
+  padding: 14px 16px 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.summary-card__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.summary-card__hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 8px;
+  margin-top: 12px;
+}
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.summary-item__label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.summary-item__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .job-card {
   margin: 12px 12px 0;

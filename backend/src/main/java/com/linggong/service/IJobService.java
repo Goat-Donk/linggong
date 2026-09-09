@@ -67,4 +67,9 @@ public interface IJobService extends IService<Job> {
      * 查询当前雇主发布的岗位（分页），含已录用/待确认人数与结算状态。
      */
     Result myJobs(Integer page, Integer pageSize);
+
+    /**
+     * 我的经营汇总（仅雇主）：累计发岗 / 招聘中 / 担保冻结中 / 已结算岗位 / 累计服务费。
+     */
+    Result employerSummary();
 }

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.Result;
 import com.linggong.dto.WalletLogDTO;
+import com.linggong.dto.WalletSummaryDTO;
 import com.linggong.entity.Wallet;
 import com.linggong.entity.WalletLog;
 import com.linggong.mapper.WalletLogMapper;
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -116,6 +119,22 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
         }
         List<WalletLogDTO> dtos = records.stream().map(this::toDTO).collect(Collectors.toList());
         return Result.ok(dtos, result.getTotal());
+    }
+
+    @Override
+    public Result summary() {
+        Long userId = UserHolder.getUser().getId();
+        Wallet wallet = ensureWallet(userId);
+        WalletSummaryDTO dto = new WalletSummaryDTO();
+        dto.setBalance(wallet.getBalance() == null ? BigDecimal.ZERO : wallet.getBalance());
+        // 工资流水正数入账，直接求和即累计到账工资
+        dto.setTotalIncome(walletLogMapper.sumAmount(userId, WalletLogType.SALARY));
+        // 提现流水为负数出账，取反得累计提现正数
+        dto.setTotalWithdraw(walletLogMapper.sumAmount(userId, WalletLogType.WITHDRAW).negate());
+        // 本月：从当月 1 号零点起算
+        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        dto.setMonthIncome(walletLogMapper.sumAmountSince(userId, WalletLogType.SALARY, monthStart));
+        return Result.ok(dto);
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.linggong.entity.JobSettlement;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /** 岗位结算单 Mapper。 */
@@ -19,4 +20,8 @@ public interface JobSettlementMapper extends BaseMapper<JobSettlement> {
             + "WHERE j.end_time IS NOT NULL AND j.end_time <= NOW() "
             + "AND j.frozen_amount > 0 AND s.id IS NULL ORDER BY j.end_time ASC LIMIT #{limit}")
     List<Job> selectExpiredUnsettledJobs(@Param("limit") int limit);
+
+    /** 汇总某雇主全部结算单的平台服务费（累计抽成，雇主口径）。 */
+    @Select("SELECT COALESCE(SUM(service_fee), 0) FROM tb_job_settlement WHERE employer_id = #{employerId}")
+    BigDecimal sumServiceFeeByEmployer(@Param("employerId") Long employerId);
 }

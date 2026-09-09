@@ -37,6 +37,12 @@ public interface IWalletService extends IService<Wallet> {
     Result logs(Integer page, Integer pageSize);
 
     /**
+     * 我的钱包汇总（余额 + 累计到账工资 + 累计提现 + 本月工资）。
+     * 面向打工人（收入统计），雇主钱包页不展示该卡，登录即可调用。
+     */
+    Result summary();
+
+    /**
      * 查询某用户可用余额（无钱包返回 0，不自动开户）。供发岗冻结预检/结算预检。
      */
     BigDecimal balanceOf(Long userId);

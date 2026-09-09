@@ -68,6 +68,15 @@ public class JobController {
     }
 
     /**
+     * 我的经营汇总（仅雇主）：累计发岗 / 招聘中 / 担保冻结中 / 已结算岗位 / 累计服务费。
+     */
+    @Operation(summary = "我的经营汇总（仅雇主）")
+    @GetMapping("/my-summary")
+    public Result mySummary() {
+        return jobService.employerSummary();
+    }
+
+    /**
      * 查询岗位详情。
      */
     @Operation(summary = "查询岗位详情")

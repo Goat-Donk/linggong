@@ -68,4 +68,13 @@ public class WalletController {
                        @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return walletService.logs(page, pageSize);
     }
+
+    /**
+     * 我的钱包汇总（余额 + 累计工资 + 累计提现 + 本月工资），打工人钱包页顶部统计卡。
+     */
+    @Operation(summary = "我的钱包汇总（余额 + 累计工资 + 累计提现 + 本月工资）")
+    @GetMapping("/summary")
+    public Result summary() {
+        return walletService.summary();
+    }
 }

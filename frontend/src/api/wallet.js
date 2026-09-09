@@ -21,3 +21,8 @@ export function withdrawWallet(amount) {
 export function getWalletLogs(page, pageSize) {
   return request.get('/wallet/logs', { params: { page, pageSize } })
 }
+
+// 我的钱包汇总（打工人收入统计卡）：data { balance, totalIncome, totalWithdraw, monthIncome }
+export function getWalletSummary() {
+  return request.get('/wallet/summary')
+}
