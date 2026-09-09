@@ -308,12 +308,13 @@ d:\linggong\
 
 - 信用治理 Step1 信用流水明细表（地基）—— [db.sql](d:/linggong/backend/src/main/resources/db.sql) 加表 19 `tb_user_credit_log`（user_id 变动对象 + reason_type 原因 EVALUATION互评/BREAK_HIRE放鸽子 + change_amount clamp后真实差值 + after_credit 变动后快照 + biz_id 业务id + remark 说明，倒序分页）。后端：`CreditLog` 实体（TYPE_* 常量）、`CreditLogMapper`、[IUserInfoService.adjustCredit](d:/linggong/backend/src/main/java/com/linggong/service/IUserInfoService.java) 签名扩为 `(userId, delta, reasonType, bizId, remark)` 并在**单点收口**记流水（真实变动为 0 不记，避免上下限噪声）；`myCredit`/`creditLogs` 新接口；[JobEvaluationServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobEvaluationServiceImpl.java) 互评落库后按好评/差评生成 remark 再调分、[JobApplicationServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobApplicationServiceImpl.java) breakHire 按放弃/取消生成 remark；新增 `CreditController`（GET /credit/my 当前分、GET /credit/logs 我的流水，前缀不在匿名白名单需登录）。前端：`api/credit.js`、`views/Credit.vue`（信用分卡按分数档变底色 + 变动规则说明卡 + 流水 van-list：原因 tag/±分变色/变后分/时间）、`router` 加 /credit、[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 菜单加「信用详情」。`mvn compile` + `npm run build` 通过；E2E 全通过：worker101 评雇主 5★ → 雇主 51 信用 90→92 + EVALUATION 流水（+2，remark「收到 5 星好评」UTF-8 正确）→ 发新岗报名录用后 quit → 101 信用 87→77 + BREAK_HIRE 流水（−10）→ /credit/logs 返回该行 → /credit/my=77 → 匿名 401；测试数据全清理（岗位/报名/钱包/信用流水复原）。**后端改动需重启、前端需硬刷新**。
 
+- 信用治理 Step2 雇主低信用 → 岗位曝光降权 —— 无新表（复用 [tb_user_info.credit](d:/linggong/backend/src/main/resources/db.sql)）。后端：[CreditRules](d:/linggong/backend/src/main/java/com/linggong/utils/CreditRules.java) 定义 `LOW_CREDIT=60` 低信用阈值 + `isLowCredit`（无信用记录按满分 100 正常处理，不误伤新雇主）；[JobMapper.selectExposurePage](d:/linggong/backend/src/main/java/com/linggong/mapper/JobMapper.java) 自定义 SQL：上架岗位 LEFT JOIN 雇主信用 → 按「是否低信用」分桶（低信用雇主岗位整体沉底）→ 桶内 `create_time DESC, id DESC`（同秒决胜，分页稳定）→ 显式 LIMIT 翻页；[JobServiceImpl.queryList](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobServiceImpl.java) 默认「最新」曝光列表走该 SQL（总条数用同筛选 wrapper 另查，曝光只重排不筛岗），距离筛选的 Java 内存排序路径用 `creditMapOf` 批量取雇主信用后按同一分桶语义；`salary`/`distance` 是用户显式排序不做干预。技术备注：没用 MyBatis-Plus 分页插件是因为它会改写跨表别名的 ORDER BY 生成 COUNT 时丢 JOIN 作用域（Unknown column 'ui.credit'），故此处绕过。`mvn compile` 通过。E2E（全通过后已清理）：雇主 110（本无信用记录=正常 100）名下 5 个上架岗默认列表本在第 12~16 位 → 临时改信用=40 → 沉到队尾 57~61（组内 id 倒序 214,213,212,211,210）、健康雇主顺序不变、total 仍 62、跨页一致（page2=[211,210]）；薪资排序下不被降权（索引散布 19/30/34/37，无泄漏）；距离+最新内存路径同样沉底（6~8 → 26~28）；删除临时信用记录后复原（回到 12~16）。**后端改动需重启，前端无需改动（降权是平台侧静默排序）**。
+
 ### 🔄 进行中
-- 信用治理 Step2 雇主低信用 → 岗位曝光降权（默认列表信用加权综合排序）。
+- 信用治理 Step3 雇主拉黑打工人（黑名单表 + 报名拦截 + 防滥用上限 + 可解除 + 静默）。
 
 ### ⏭ 下一步
-- 信用治理 Step2：雇主低信用 → 岗位曝光降权（默认列表信用加权综合排序，低信用雇主岗位沉底）。
-- 信用治理 Step3：雇主拉黑打工人（黑名单表 + 报名拦截 + 防滥用上限 + 可解除 + 静默不通知）。
+- 信用治理 Step3：雇主拉黑打工人（黑名单表 + 报名拦截 + 防滥用上限 + 可解除 + 静默不通知被打工人）。
 - 信用治理 Step4：雇主审核报名时可见工人信用分 + 放鸽子标记（撮合透明度）。
 
 ---

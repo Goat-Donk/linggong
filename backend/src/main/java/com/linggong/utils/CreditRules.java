@@ -20,6 +20,16 @@ public final class CreditRules {
     /** 放鸽子/单方解除已录用岗位的信用扣分 */
     public static final int BREAK_PENALTY = -10;
 
+    /**
+     * 低信用雇主判定阈值：雇主信用分低于该值即视为「低信用」，
+     * 其发布的岗位在默认曝光列表（首页「最新」）会被降权，排到正常雇主岗位之后。
+     *
+     * <p>口径说明：雇主初始 100，放鸽子一次 −10、收差评 −3。正常履约的雇主很难跌破 60，
+     * 跌破 60 通常意味着多次违约/差评，已属风险雇主，适合触发曝光降权；
+     * 而一次小失误（−10 到 90、−3 到 97）不影响曝光，避免降权伤及正常经营。</p>
+     */
+    public static final int LOW_CREDIT = 60;
+
     private CreditRules() {
     }
 
@@ -47,5 +57,14 @@ public final class CreditRules {
      */
     public static int clamp(int credit) {
         return Math.max(MIN, Math.min(MAX, credit));
+    }
+
+    /**
+     * 是否低信用（触发岗位曝光降权 / 撮合风险提示）。
+     *
+     * @param credit 信用分；null 视为无记录，按默认满分 100 处理（不降权）
+     */
+    public static boolean isLowCredit(Integer credit) {
+        return (credit == null ? DEFAULT : credit) < LOW_CREDIT;
     }
 }

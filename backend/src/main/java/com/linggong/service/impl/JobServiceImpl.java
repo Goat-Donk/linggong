@@ -14,12 +14,15 @@ import com.linggong.dto.UserDTO;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.JobSettlement;
+import com.linggong.entity.UserInfo;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.JobSettlementMapper;
+import com.linggong.mapper.UserInfoMapper;
 import com.linggong.service.IJobService;
 import com.linggong.service.IWalletService;
 import com.linggong.utils.CacheClient;
+import com.linggong.utils.CreditRules;
 import com.linggong.utils.GeoUtil;
 import com.linggong.utils.JobBloomFilter;
 import com.linggong.utils.RedisConstants;
@@ -57,6 +60,9 @@ import java.util.stream.Collectors;
  *   <li>登录态由 LoginInterceptor 保证，进入写方法时 UserHolder 一定非空。</li>
  *   <li>岗位详情走「布隆过滤器 + 逻辑过期缓存」；附近搜索走 Redis GEO。</li>
  *   <li>岗位写操作需同步维护缓存与 GEO，保证一致性。</li>
+ *   <li>默认「最新」曝光列表做信用加权：雇主信用 &lt; {@link CreditRules#LOW_CREDIT}
+ *       的岗位整体降权沉底（DB 分页与距离内存排序两条路径同一语义），
+ *       salary/distance 是用户显式排序不受干预。</li>
  *   <li>薪资=日薪（元/天）；发岗时冻结担保金 日薪×名额×任务天数，编辑按差额补冻/释放，余额不足拒绝。</li>
  * </ul>
  */
@@ -69,17 +75,20 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
     private final IWalletService walletService;
     private final JobSettlementMapper jobSettlementMapper;
     private final JobApplicationMapper jobApplicationMapper;
+    private final UserInfoMapper userInfoMapper;
 
     public JobServiceImpl(CacheClient cacheClient, JobBloomFilter jobBloomFilter,
                           StringRedisTemplate stringRedisTemplate, IWalletService walletService,
                           JobSettlementMapper jobSettlementMapper,
-                          JobApplicationMapper jobApplicationMapper) {
+                          JobApplicationMapper jobApplicationMapper,
+                          UserInfoMapper userInfoMapper) {
         this.cacheClient = cacheClient;
         this.jobBloomFilter = jobBloomFilter;
         this.stringRedisTemplate = stringRedisTemplate;
         this.walletService = walletService;
         this.jobSettlementMapper = jobSettlementMapper;
         this.jobApplicationMapper = jobApplicationMapper;
+        this.userInfoMapper = userInfoMapper;
     }
 
     @Override
@@ -332,12 +341,21 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         // 2. 不涉及距离：数据库排序 + 分页（性能最好）
         if (!needDistance) {
             if ("salary".equals(sort)) {
+                // 薪资排序是用户的显式意图，不做信用干预，保持纯粹的最高薪优先
                 wrapper.orderByDesc(Job::getSalary);
-            } else {
-                wrapper.orderByDesc(Job::getCreateTime);
+                Page<Job> result = page(new Page<>(page, pageSize), wrapper);
+                return Result.ok(result.getRecords(), result.getTotal());
             }
-            Page<Job> result = page(new Page<>(page, pageSize), wrapper);
-            return Result.ok(result.getRecords(), result.getTotal());
+            // 默认「最新」= 曝光列表：低信用雇主（< LOW_CREDIT）的岗位整体降权沉底。
+            // 排序带雇主信用（LEFT JOIN），分页插件会改写 ORDER BY 报错，故自定义 SQL +
+            // 显式 LIMIT 翻页；总条数用同筛选条件的 wrapper 另查（曝光不筛岗，仅重排）。
+            long total = count(wrapper);
+            List<Job> records = baseMapper.selectExposurePage(categoryId,
+                    StringUtils.hasText(keyword) ? keyword : null,
+                    minSalary, maxSalary,
+                    CreditRules.LOW_CREDIT, CreditRules.DEFAULT,
+                    Math.max(0, (page - 1) * pageSize), pageSize);
+            return Result.ok(records, total);
         }
 
         // 3. 涉及距离：查全量候选，Java 算距离 → 过滤 → 排序 → 内存分页。
@@ -363,7 +381,13 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         } else if ("distance".equals(sort)) {
             matched.sort(Comparator.comparingDouble(JobDTO::getDistance));
         } else {
-            matched.sort(Comparator.comparing(JobDTO::getCreateTime).reversed());
+            // 默认「最新」= 曝光列表（与不涉及距离的 DB 路径同一语义）：
+            // 低信用雇主（< LOW_CREDIT）的岗位整体降权沉底，桶内最新优先、同秒按 id 倒序
+            Map<Long, Integer> creditMap = creditMapOf(matched);
+            matched.sort(Comparator
+                    .comparingInt((JobDTO dto) -> CreditRules.isLowCredit(creditMap.get(dto.getEmployerId())) ? 1 : 0)
+                    .thenComparing(JobDTO::getCreateTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(JobDTO::getId, Comparator.reverseOrder()));
         }
         long total = matched.size();
         int from = Math.min((page - 1) * pageSize, matched.size());
@@ -429,6 +453,25 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
                         .eq(JobApplication::getStatus, status));
         return apps.stream().collect(Collectors.groupingBy(
                 JobApplication::getJobId, Collectors.counting()));
+    }
+
+    /**
+     * 批量取岗位发布者的信用分：employerId → credit。
+     * 无信用记录（tb_user_info 无行）视为默认满分 {@link CreditRules#DEFAULT}，不做降权。
+     */
+    private Map<Long, Integer> creditMapOf(List<? extends Job> jobs) {
+        Set<Long> employerIds = jobs.stream().map(Job::getEmployerId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (employerIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return userInfoMapper.selectList(new LambdaQueryWrapper<UserInfo>()
+                        .in(UserInfo::getUserId, employerIds))
+                .stream()
+                .filter(info -> info.getUserId() != null)
+                .collect(Collectors.toMap(UserInfo::getUserId,
+                        info -> info.getCredit() == null ? CreditRules.DEFAULT : info.getCredit(),
+                        (a, b) -> b));
     }
 
     /**
