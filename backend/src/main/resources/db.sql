@@ -226,6 +226,35 @@ CREATE TABLE IF NOT EXISTS `tb_notification` (
     KEY `idx_user` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '站内通知表';
 
+-- ---------- 17. 聊天会话表（雇主↔工人 围绕岗位的一对一对话） ----------
+CREATE TABLE IF NOT EXISTS `tb_chat_conversation` (
+    `id`                bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `job_id`            bigint       NOT NULL COMMENT '岗位 id',
+    `worker_id`         bigint       NOT NULL COMMENT '打工人 id',
+    `employer_id`       bigint       NOT NULL COMMENT '雇主 id（冗余自岗位，便于会话列表查询）',
+    `last_message`      varchar(255) DEFAULT NULL COMMENT '最后一条消息预览',
+    `last_message_time` datetime     DEFAULT NULL COMMENT '最后消息时间（会话排序）',
+    `create_time`       datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`       datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_job_worker` (`job_id`, `worker_id`),
+    KEY `idx_worker` (`worker_id`),
+    KEY `idx_employer` (`employer_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '聊天会话表';
+
+-- ---------- 18. 聊天消息表 ----------
+CREATE TABLE IF NOT EXISTS `tb_chat_message` (
+    `id`              bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `conversation_id` bigint       NOT NULL COMMENT '会话 id',
+    `from_user_id`    bigint       NOT NULL COMMENT '发送者 id',
+    `to_user_id`      bigint       NOT NULL COMMENT '接收者 id',
+    `content`         varchar(500) NOT NULL COMMENT '消息内容（纯文本）',
+    `read_flag`       tinyint      NOT NULL DEFAULT 0 COMMENT '是否已读：0未读 1已读',
+    `create_time`     datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_conversation` (`conversation_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '聊天消息表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

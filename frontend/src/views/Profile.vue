@@ -31,6 +31,12 @@
           <van-badge v-if="unreadCount > 0" :content="unreadCount > 99 ? '99+' : unreadCount" />
         </template>
       </van-cell>
+      <van-cell icon="chat-o" is-link @click="$router.push('/chat')">
+        <template #title>
+          我的消息
+          <van-badge v-if="chatUnreadCount > 0" :content="chatUnreadCount > 99 ? '99+' : chatUnreadCount" />
+        </template>
+      </van-cell>
       <van-cell
         title="动态"
         icon="fire-o"
@@ -128,16 +134,24 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { logout as apiLogout } from '@/api/user'
 import { getUnreadCount } from '@/api/notification'
+import { getUnreadCount as getChatUnreadCount } from '@/api/chat'
 import { clearUser, userState } from '@/stores/user'
 
 const router = useRouter()
 const unreadCount = ref(0)
+const chatUnreadCount = ref(0)
 
-// 进入「我的」页拉取未读通知数，显示在「消息通知」菜单红点
+// 进入「我的」页拉取未读通知数 + 未读消息数，显示在菜单红点
 onMounted(async () => {
   try {
     const res = await getUnreadCount()
     unreadCount.value = res.data ?? 0
+  } catch (e) {
+    // 拉不到未读数不影响页面
+  }
+  try {
+    const res = await getChatUnreadCount()
+    chatUnreadCount.value = res.data ?? 0
   } catch (e) {
     // 拉不到未读数不影响页面
   }

@@ -77,6 +77,18 @@ const routes = [
     meta: { title: '消息通知', requiresAuth: true }
   },
   {
+    path: '/chat',
+    name: 'chatList',
+    component: () => import('@/views/ChatList.vue'),
+    meta: { title: '消息', requiresAuth: true }
+  },
+  {
+    path: '/chat/:peerId',
+    name: 'chat',
+    component: () => import('@/views/Chat.vue'),
+    meta: { title: '聊天', requiresAuth: true }
+  },
+  {
     path: '/my-applications',
     name: 'myApplications',
     component: () => import('@/views/MyApplications.vue'),

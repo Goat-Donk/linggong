@@ -48,6 +48,16 @@
           <span class="publisher__name">{{ publisher.nickName }}</span>
           <span class="publisher__sub">发布者</span>
         </div>
+        <van-button
+          v-if="userState.info?.id !== job.employerId"
+          class="publisher__chat"
+          size="small"
+          type="primary"
+          plain
+          @click="goChat"
+        >
+          联系雇主
+        </van-button>
       </div>
 
       <div class="desc">
@@ -228,6 +238,12 @@ onMounted(async () => {
     checkFavorited()
   }
 })
+
+// 联系雇主：进入围绕该岗位的聊天会话
+function goChat() {
+  if (!job.value) return
+  router.push(`/chat/${job.value.employerId}?jobId=${job.value.id}`)
+}
 
 // 查收藏状态：星标点亮
 async function checkFavorited() {
@@ -431,6 +447,9 @@ async function submitEval() {
 .publisher__sub {
   font-size: 12px;
   color: var(--text-tertiary);
+}
+.publisher__chat {
+  margin-left: auto;
 }
 .desc {
   margin: 12px;

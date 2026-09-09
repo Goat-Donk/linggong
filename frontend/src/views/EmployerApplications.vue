@@ -30,9 +30,10 @@
 
         <div class="app-card__foot">
           <span class="app-card__time">{{ formatDateTime(app.createTime) }}</span>
-          <div v-if="app.status === 0" class="app-card__actions">
-            <van-button size="small" type="danger" plain @click="onReject(app)">拒绝</van-button>
-            <van-button size="small" type="primary" @click="onApprove(app)">通过</van-button>
+          <div class="app-card__actions">
+            <van-button size="small" type="default" plain @click="goChat(app)">联系TA</van-button>
+            <van-button v-if="app.status === 0" size="small" type="danger" plain @click="onReject(app)">拒绝</van-button>
+            <van-button v-if="app.status === 0" size="small" type="primary" @click="onApprove(app)">通过</van-button>
           </div>
         </div>
       </div>
@@ -86,6 +87,11 @@ function goWorker(workerId) {
   if (workerId) {
     router.push(`/worker-profile/view/${workerId}`)
   }
+}
+
+// 联系该报名工人：进入围绕该岗位的聊天会话
+function goChat(app) {
+  router.push(`/chat/${app.workerId}?jobId=${app.jobId}`)
 }
 
 async function onApprove(app) {
