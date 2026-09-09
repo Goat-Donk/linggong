@@ -23,6 +23,10 @@ public class Notification {
     public static final String TYPE_APPLY_REJECTED = "APPLY_REJECTED";
     /** 通知类型：结算工资到账 */
     public static final String TYPE_SETTLE_WAGE = "SETTLE_WAGE";
+    /** 通知类型：工人放弃已录用岗位 */
+    public static final String TYPE_APPLY_QUIT = "APPLY_QUIT";
+    /** 通知类型：雇主取消已录用 */
+    public static final String TYPE_APPLY_DISMISS = "APPLY_DISMISS";
 
     /** 主键，自增 */
     @TableId(type = IdType.AUTO)

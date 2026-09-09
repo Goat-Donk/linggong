@@ -45,4 +45,25 @@ public interface IJobApplicationService extends IService<JobApplication> {
      * @return 撤销结果
      */
     Result cancel(Long applicationId);
+
+    /**
+     * 打工人放弃已录用岗位（1 已录用 → 3 已取消），释放名额回招。
+     *
+     * <p>仅当该工人对本岗位还没有已核销到岗（on_status=2）时才允许，
+     * 否则已有做工记录应走结算按实际付薪，避免白干。
+     *
+     * @param applicationId 报名记录 id
+     * @return 放弃结果
+     */
+    Result quit(Long applicationId);
+
+    /**
+     * 雇主取消对某工人的录用（1 已录用 → 3 已取消），释放名额补招。
+     *
+     * <p>门槛同 {@link #quit}：无已核销考勤才允许。防止对已做工的工人赖账。
+     *
+     * @param applicationId 报名记录 id
+     * @return 取消录用结果
+     */
+    Result dismiss(Long applicationId);
 }

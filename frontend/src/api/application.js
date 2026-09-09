@@ -29,3 +29,13 @@ export function rejectApplication(id) {
 export function cancelApplication(id) {
   return request.put(`/job-application/${id}/cancel`)
 }
+
+// 打工人放弃已录用岗位（1 → 3），释放名额回招
+export function quitApplication(id) {
+  return request.put(`/job-application/${id}/quit`)
+}
+
+// 雇主取消对某工人的录用（1 → 3），释放名额补招
+export function dismissApplication(id) {
+  return request.put(`/job-application/${id}/dismiss`)
+}

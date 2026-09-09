@@ -34,6 +34,16 @@
             <van-button size="small" type="default" plain @click="goChat(app)">联系TA</van-button>
             <van-button v-if="app.status === 0" size="small" type="danger" plain @click="onReject(app)">拒绝</van-button>
             <van-button v-if="app.status === 0" size="small" type="primary" @click="onApprove(app)">通过</van-button>
+            <van-button
+              v-if="app.status === 1"
+              size="small"
+              type="warning"
+              plain
+              :loading="dismissingId === app.id"
+              @click="onDismiss(app)"
+            >
+              取消录用
+            </van-button>
           </div>
         </div>
       </div>
@@ -46,11 +56,12 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showSuccessToast } from 'vant'
+import { showConfirmDialog, showSuccessToast } from 'vant'
 import {
   getEmployerApplications,
   approveApplication,
-  rejectApplication
+  rejectApplication,
+  dismissApplication
 } from '@/api/application'
 import { formatApplyStatus, applyStatusType, formatDateTime } from '@/utils/format'
 
@@ -61,6 +72,7 @@ const page = ref(1)
 const pageSize = 10
 const loading = ref(false)
 const finished = ref(false)
+const dismissingId = ref(null)
 
 async function onLoad() {
   try {
@@ -111,6 +123,29 @@ async function onReject(app) {
     showSuccessToast('已拒绝')
   } catch (e) {
     // 失败提示已由 request.js Toast
+  }
+}
+
+// 取消已录用(1)的录用：名额释放可补招。仅当该工人无已核销到岗时才允许，
+// 避免对已做工的工人赖账（后端兜底校验，前端仅二次确认）。
+async function onDismiss(app) {
+  try {
+    await showConfirmDialog({
+      title: '取消录用',
+      message: `确定取消对「${app.workerName}」的录用吗？名额会释放可重新招人，该工人会收到通知。`
+    })
+  } catch (e) {
+    return // 用户取消
+  }
+  dismissingId.value = app.id
+  try {
+    await dismissApplication(app.id)
+    app.status = 3
+    showSuccessToast('已取消录用')
+  } catch (e) {
+    // 失败提示已由 request.js Toast（已有核销考勤不允许取消等）
+  } finally {
+    dismissingId.value = null
   }
 }
 </script>

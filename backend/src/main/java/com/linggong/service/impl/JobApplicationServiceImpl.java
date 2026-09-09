@@ -9,10 +9,12 @@ import com.linggong.dto.ApplyMessage;
 import com.linggong.dto.EmployerApplicationDTO;
 import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
+import com.linggong.entity.Attendance;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.Notification;
 import com.linggong.entity.User;
+import com.linggong.mapper.AttendanceMapper;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
@@ -56,6 +58,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
 
     private final JobMapper jobMapper;
     private final UserMapper userMapper;
+    private final AttendanceMapper attendanceMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final RedisIdWorker redisIdWorker;
     private final RabbitTemplate rabbitTemplate;
@@ -65,12 +68,14 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final CacheClient cacheClient;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
+                                     AttendanceMapper attendanceMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
                                      RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
                                      RedissonClient redissonClient, INotificationService notificationService,
                                      CacheClient cacheClient) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
+        this.attendanceMapper = attendanceMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.redisIdWorker = redisIdWorker;
         this.rabbitTemplate = rabbitTemplate;
@@ -287,9 +292,96 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         return Result.ok();
     }
 
+    @Override
+    public Result quit(Long applicationId) {
+        Integer role = UserHolder.getUser().getRole();
+        if (role == null || role != 0) {
+            return Result.fail("只有打工人可以放弃录用岗位");
+        }
+        return breakHire(applicationId, true);
+    }
+
+    @Override
+    public Result dismiss(Long applicationId) {
+        Integer role = UserHolder.getUser().getRole();
+        if (role == null || role != 1) {
+            return Result.fail("只有雇主可以取消录用");
+        }
+        return breakHire(applicationId, false);
+    }
+
     /**
-     * 释放一个名额：报名 0→3（打工人撤销 / 雇主拒绝）时调用，对称于报名时的
-     * deductHeadcount + Lua 扣 stock，避免名额被已取消的报名永久占用。
+     * 履约退出共用逻辑：工人放弃 / 雇主取消录用。
+     *
+     * <p>门槛：报名仍为已录用(1)，且该工人对本岗位无已核销到岗（on_status=2）。
+     * 后者防止「已做工却被退出」造成白干——一旦核销过到岗，只能由结算按实际付薪。
+     * 通过后状态 1→3，释放名额（DB headcount + Redis 秒杀库存 + 详情缓存）并通知对方。
+     */
+    private Result breakHire(Long applicationId, boolean workerQuit) {
+        RLock lock = redissonClient.getLock(RedisConstants.AUDIT_LOCK_KEY + applicationId);
+        if (!lock.tryLock()) {
+            return Result.fail("操作过于频繁，请稍后再试");
+        }
+        try {
+            JobApplication application = getById(applicationId);
+            if (application == null) {
+                return Result.fail("报名记录不存在");
+            }
+            Job job = jobMapper.selectById(application.getJobId());
+            if (job == null) {
+                return Result.fail("岗位不存在");
+            }
+            Long me = UserHolder.getUser().getId();
+            // 归属校验：工人只能放弃自己的报名，雇主只能取消自己岗位的录用
+            if (workerQuit) {
+                if (!application.getWorkerId().equals(me)) {
+                    return Result.fail("只能放弃自己的报名");
+                }
+            } else {
+                if (!job.getEmployerId().equals(me)) {
+                    return Result.fail("只能取消自己岗位的录用");
+                }
+            }
+            // 状态校验：仅已录用(1)可退出
+            if (application.getStatus() == null || application.getStatus() != 1) {
+                return Result.fail("该报名非已录用状态，无法退出");
+            }
+            // 已核销到岗门槛：有已核销到岗则禁止退出，避免白做工
+            Long approved = attendanceMapper.selectCount(new LambdaQueryWrapper<Attendance>()
+                    .eq(Attendance::getJobId, application.getJobId())
+                    .eq(Attendance::getWorkerId, application.getWorkerId())
+                    .eq(Attendance::getOnStatus, 2));
+            if (approved != null && approved > 0) {
+                return Result.fail(workerQuit
+                        ? "你已有核销的到岗记录，退出会损失已做工工资，请完成当日由雇主结算"
+                        : "该工人已有核销的到岗记录，取消录用会损害其已做工时，请结算按实际付薪");
+            }
+            // 条件更新兜底并发（与结算/审核竞态）：仅在仍为已录用时置 3，命中 0 行说明已被处理
+            boolean updated = lambdaUpdate()
+                    .eq(JobApplication::getId, applicationId)
+                    .eq(JobApplication::getStatus, 1)
+                    .set(JobApplication::getStatus, 3)
+                    .update();
+            if (!updated) {
+                return Result.fail("该报名已处理，无法退出");
+            }
+            releaseSlot(application);
+            if (workerQuit) {
+                notificationService.notify(job.getEmployerId(), Notification.TYPE_APPLY_QUIT, "工人放弃录用",
+                        "打工人已放弃岗位「" + job.getName() + "」，名额已释放，可继续招人", job.getId());
+            } else {
+                notificationService.notify(application.getWorkerId(), Notification.TYPE_APPLY_DISMISS, "已被取消录用",
+                        "岗位「" + job.getName() + "」已取消对你的录用，名额已释放，可继续找其他工作", job.getId());
+            }
+            return Result.ok();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 释放一个名额：报名进入已取消/放弃终态（撤销/拒绝 0→3，或履约退出 1→3）时调用，
+     * 对称于报名时的 deductHeadcount + Lua 扣 stock，避免名额被不再参与的报名永久占用。
      * Redis 名额是软缓存，DB headcount 才是最终真实值，二者都退回保持一致。
      */
     private void releaseSlot(JobApplication application) {

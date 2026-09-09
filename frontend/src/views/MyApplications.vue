@@ -50,6 +50,21 @@
             撤销报名
           </van-button>
         </div>
+        <div
+          v-else-if="app.status === 1"
+          class="app-card__actions"
+        >
+          <van-button
+            size="small"
+            type="warning"
+            plain
+            round
+            :loading="quittingId === app.id"
+            @click.stop="onQuit(app)"
+          >
+            放弃岗位
+          </van-button>
+        </div>
       </div>
 
       <van-empty v-if="finished && applications.length === 0" description="还没有报名记录" />
@@ -60,7 +75,7 @@
 <script setup>
 import { ref } from 'vue'
 import { showConfirmDialog, showSuccessToast } from 'vant'
-import { getMyApplications, cancelApplication } from '@/api/application'
+import { getMyApplications, cancelApplication, quitApplication } from '@/api/application'
 import { formatApplyStatus, applyStatusType, formatSalary, formatDateTime } from '@/utils/format'
 
 const applications = ref([])
@@ -69,6 +84,7 @@ const pageSize = 10
 const loading = ref(false)
 const finished = ref(false)
 const cancelingId = ref(null)
+const quittingId = ref(null)
 
 async function onLoad() {
   try {
@@ -110,6 +126,29 @@ async function onCancel(app) {
     // 失败提示已由 request.js Toast
   } finally {
     cancelingId.value = null
+  }
+}
+
+// 放弃已录用(1)的岗位：释放名额回招，雇主会收到通知。
+// 一旦你已有被核销的到岗记录就不允许放弃，需走结算。
+async function onQuit(app) {
+  try {
+    await showConfirmDialog({
+      title: '放弃岗位',
+      message: `确定放弃「${app.jobName}」吗？名额将释放给其他工人，雇主会收到通知。`
+    })
+  } catch (e) {
+    return // 用户取消
+  }
+  quittingId.value = app.id
+  try {
+    await quitApplication(app.id)
+    app.status = 3
+    showSuccessToast('已放弃该岗位')
+  } catch (e) {
+    // 失败提示已由 request.js Toast（已有核销考勤不允许放弃等）
+  } finally {
+    quittingId.value = null
   }
 }
 </script>

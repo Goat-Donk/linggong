@@ -85,4 +85,22 @@ public class JobApplicationController {
     public Result cancel(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
         return jobApplicationService.cancel(id);
     }
+
+    /**
+     * 打工人放弃已录用岗位（1 已录用 → 3 已取消），释放名额回招。
+     */
+    @Operation(summary = "打工人放弃已录用岗位（仅无已核销到岗时）")
+    @PutMapping("/{id}/quit")
+    public Result quit(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
+        return jobApplicationService.quit(id);
+    }
+
+    /**
+     * 雇主取消对某工人的录用（1 已录用 → 3 已取消），释放名额补招。
+     */
+    @Operation(summary = "雇主取消录用（仅无已核销到岗时）")
+    @PutMapping("/{id}/dismiss")
+    public Result dismiss(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
+        return jobApplicationService.dismiss(id);
+    }
 }
