@@ -132,7 +132,7 @@ async function onDismiss(app) {
   try {
     await showConfirmDialog({
       title: '取消录用',
-      message: `确定取消对「${app.workerName}」的录用吗？名额会释放可重新招人，该工人会收到通知。`
+      message: `确定取消对「${app.workerName}」的录用吗？名额会释放可重新招人，该工人会收到通知，且你的信用分将 −10。`
     })
   } catch (e) {
     return // 用户取消

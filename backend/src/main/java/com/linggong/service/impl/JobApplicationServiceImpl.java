@@ -20,7 +20,9 @@ import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobApplicationService;
 import com.linggong.service.INotificationService;
+import com.linggong.service.IUserInfoService;
 import com.linggong.utils.CacheClient;
+import com.linggong.utils.CreditRules;
 import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RedisIdWorker;
@@ -66,13 +68,14 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final RedissonClient redissonClient;
     private final INotificationService notificationService;
     private final CacheClient cacheClient;
+    private final IUserInfoService userInfoService;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
                                      AttendanceMapper attendanceMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
                                      RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
                                      RedissonClient redissonClient, INotificationService notificationService,
-                                     CacheClient cacheClient) {
+                                     CacheClient cacheClient, IUserInfoService userInfoService) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
         this.attendanceMapper = attendanceMapper;
@@ -83,6 +86,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         this.redissonClient = redissonClient;
         this.notificationService = notificationService;
         this.cacheClient = cacheClient;
+        this.userInfoService = userInfoService;
     }
 
     @Override
@@ -315,7 +319,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
      *
      * <p>门槛：报名仍为已录用(1)，且该工人对本岗位无已核销到岗（on_status=2）。
      * 后者防止「已做工却被退出」造成白干——一旦核销过到岗，只能由结算按实际付薪。
-     * 通过后状态 1→3，释放名额（DB headcount + Redis 秒杀库存 + 详情缓存）并通知对方。
+     * 通过后状态 1→3，释放名额（DB headcount + Redis 秒杀库存 + 详情缓存）、扣发起方信用分并通知对方。
      */
     private Result breakHire(Long applicationId, boolean workerQuit) {
         RLock lock = redissonClient.getLock(RedisConstants.AUDIT_LOCK_KEY + applicationId);
@@ -366,6 +370,9 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
                 return Result.fail("该报名已处理，无法退出");
             }
             releaseSlot(application);
+            // 信用分联动：单方解除录用属「放鸽子」，扣发起方信用分（工人放弃扣工人、雇主取消扣雇主）
+            Long breaker = workerQuit ? application.getWorkerId() : job.getEmployerId();
+            userInfoService.adjustCredit(breaker, CreditRules.BREAK_PENALTY);
             if (workerQuit) {
                 notificationService.notify(job.getEmployerId(), Notification.TYPE_APPLY_QUIT, "工人放弃录用",
                         "打工人已放弃岗位「" + job.getName() + "」，名额已释放，可继续招人", job.getId());

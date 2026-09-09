@@ -16,6 +16,8 @@ import com.linggong.mapper.JobEvaluationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobEvaluationService;
+import com.linggong.service.IUserInfoService;
+import com.linggong.utils.CreditRules;
 import com.linggong.utils.UserHolder;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -44,13 +46,16 @@ public class JobEvaluationServiceImpl extends ServiceImpl<JobEvaluationMapper, J
     private final JobMapper jobMapper;
     private final JobApplicationMapper jobApplicationMapper;
     private final UserMapper userMapper;
+    private final IUserInfoService userInfoService;
 
     public JobEvaluationServiceImpl(JobMapper jobMapper,
                                     JobApplicationMapper jobApplicationMapper,
-                                    UserMapper userMapper) {
+                                    UserMapper userMapper,
+                                    IUserInfoService userInfoService) {
         this.jobMapper = jobMapper;
         this.jobApplicationMapper = jobApplicationMapper;
         this.userMapper = userMapper;
+        this.userInfoService = userInfoService;
     }
 
     @Override
@@ -110,6 +115,8 @@ public class JobEvaluationServiceImpl extends ServiceImpl<JobEvaluationMapper, J
         } catch (DuplicateKeyException e) {
             return Result.fail("您已评价过该岗位");
         }
+        // 信用分联动：按评分折算被评价人的信用分（5★+2 / 4★+1 / 3★不变 / 1~2★−3）
+        userInfoService.adjustCredit(toUserId, CreditRules.deltaByRating(form.getRating()));
         return Result.ok(evaluation.getId());
     }
 

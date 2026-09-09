@@ -15,6 +15,7 @@ import com.linggong.mapper.UserMapper;
 import com.linggong.mapper.WorkerProfileMapper;
 import com.linggong.service.IUserInfoService;
 import com.linggong.service.IWorkerProfileService;
+import com.linggong.utils.CreditRules;
 import com.linggong.utils.UserHolder;
 import org.springframework.stereotype.Service;
 
@@ -104,7 +105,8 @@ public class WorkerProfileServiceImpl extends ServiceImpl<WorkerProfileMapper, W
             view.setAge(info.getAge());
             view.setGender(info.getGender());
             view.setIntroduce(info.getIntroduce());
-            view.setCredit(info.getCredit());
+            // 老资料行 credit 可能为 null（建表默认 100 前写入），统一按默认 100 展示
+            view.setCredit(info.getCredit() != null ? info.getCredit() : CreditRules.DEFAULT);
         }
 
         // 3. 求职登记内容

@@ -135,7 +135,7 @@ async function onQuit(app) {
   try {
     await showConfirmDialog({
       title: '放弃岗位',
-      message: `确定放弃「${app.jobName}」吗？名额将释放给其他工人，雇主会收到通知。`
+      message: `确定放弃「${app.jobName}」吗？名额将释放给其他工人，雇主会收到通知，且你的信用分将 −10。`
     })
   } catch (e) {
     return // 用户取消
