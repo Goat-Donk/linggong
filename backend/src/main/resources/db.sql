@@ -269,6 +269,19 @@ CREATE TABLE IF NOT EXISTS `tb_user_credit_log` (
     KEY `idx_user` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '信用分流水表';
 
+-- ---------- 20. 雇主拉黑打工人黑名单（全局生效：拉黑后该雇主所有岗位报名被拦） ----------
+CREATE TABLE IF NOT EXISTS `tb_employer_blacklist` (
+    `id`          bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `employer_id` bigint       NOT NULL COMMENT '拉黑发起方（雇主）id',
+    `worker_id`   bigint       NOT NULL COMMENT '被打工人 id',
+    `reason`      varchar(100) NOT NULL DEFAULT '' COMMENT '拉黑原因（雇主自选/自填，仅雇主侧可见）',
+    `create_time` datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_employer_worker` (`employer_id`, `worker_id`),
+    KEY `idx_employer` (`employer_id`),
+    KEY `idx_worker` (`worker_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '雇主拉黑打工人黑名单';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================

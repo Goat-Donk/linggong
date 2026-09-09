@@ -39,6 +39,9 @@ public class EmployerApplicationDTO {
     /** 状态：0 待确认 / 1 已录用 / 2 已完成 / 3 已取消 */
     private Integer status;
 
+    /** 该报名人是否已被当前雇主拉黑（用于审核列表标记 / 隐藏拉黑入口） */
+    private Boolean blacklisted;
+
     /** 报名时间 */
     private LocalDateTime createTime;
 }

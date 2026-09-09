@@ -11,11 +11,13 @@ import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Attendance;
 import com.linggong.entity.CreditLog;
+import com.linggong.entity.EmployerBlacklist;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.Notification;
 import com.linggong.entity.User;
 import com.linggong.mapper.AttendanceMapper;
+import com.linggong.mapper.EmployerBlacklistMapper;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
@@ -40,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -70,13 +73,15 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final INotificationService notificationService;
     private final CacheClient cacheClient;
     private final IUserInfoService userInfoService;
+    private final EmployerBlacklistMapper employerBlacklistMapper;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
                                      AttendanceMapper attendanceMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
                                      RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
                                      RedissonClient redissonClient, INotificationService notificationService,
-                                     CacheClient cacheClient, IUserInfoService userInfoService) {
+                                     CacheClient cacheClient, IUserInfoService userInfoService,
+                                     EmployerBlacklistMapper employerBlacklistMapper) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
         this.attendanceMapper = attendanceMapper;
@@ -88,6 +93,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         this.notificationService = notificationService;
         this.cacheClient = cacheClient;
         this.userInfoService = userInfoService;
+        this.employerBlacklistMapper = employerBlacklistMapper;
     }
 
     @Override
@@ -109,6 +115,10 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         }
         if (job.getEmployerId().equals(workerId)) {
             return Result.fail("不能报名自己发布的岗位");
+        }
+        // 黑名单拦截：该雇主已拉黑此工人则整单拒绝，且在 Lua 扣名额之前，避免白占名额
+        if (isBlacklisted(job.getEmployerId(), workerId)) {
+            return Result.fail("你已被该雇主拉黑，暂时无法报名其发布的岗位");
         }
 
         // 2. 名额预热：Redis 无缓存时从 DB 懒加载（覆盖 Phase 2 已发布的老岗位）
@@ -201,8 +211,14 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         Map<Long, User> userMap = workerIds.isEmpty() ? Collections.emptyMap()
                 : userMapper.selectBatchIds(workerIds).stream()
                         .collect(Collectors.toMap(User::getId, user -> user));
+        // 3.1 查这批报名人里哪些已被我（雇主）拉黑，用于展示「已拉黑」标记 / 隐藏拉黑入口
+        Set<Long> blacklistedWorkerIds = workerIds.isEmpty() ? Collections.emptySet()
+                : employerBlacklistMapper.selectList(new LambdaQueryWrapper<EmployerBlacklist>()
+                        .eq(EmployerBlacklist::getEmployerId, employerId)
+                        .in(EmployerBlacklist::getWorkerId, workerIds))
+                        .stream().map(EmployerBlacklist::getWorkerId).collect(Collectors.toSet());
 
-        // 4. 组装 DTO：报名 + 岗位名 + 报名人昵称头像
+        // 4. 组装 DTO：报名 + 岗位名 + 报名人昵称头像 + 是否已拉黑
         List<EmployerApplicationDTO> dtos = pageResult.getRecords().stream().map(app -> {
             EmployerApplicationDTO dto = new EmployerApplicationDTO();
             dto.setId(app.getId());
@@ -210,6 +226,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
             dto.setWorkerId(app.getWorkerId());
             dto.setStatus(app.getStatus());
             dto.setCreateTime(app.getCreateTime());
+            dto.setBlacklisted(blacklistedWorkerIds.contains(app.getWorkerId()));
             Job job = jobMap.get(app.getJobId());
             if (job != null) {
                 dto.setJobName(job.getName());
@@ -387,6 +404,36 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         } finally {
             lock.unlock();
         }
+    }
+
+    @Override
+    public boolean isBlacklisted(Long employerId, Long workerId) {
+        Long count = employerBlacklistMapper.selectCount(new LambdaQueryWrapper<EmployerBlacklist>()
+                .eq(EmployerBlacklist::getEmployerId, employerId)
+                .eq(EmployerBlacklist::getWorkerId, workerId));
+        return count != null && count > 0;
+    }
+
+    @Override
+    public int cancelPendingOfWorkerOnEmployer(Long employerId, Long workerId) {
+        // 只处理该工人对「该雇主所有岗位」的待确认报名，避免影响其他雇主的岗位
+        List<Job> myJobs = jobMapper.selectList(
+                new LambdaQueryWrapper<Job>().eq(Job::getEmployerId, employerId));
+        if (myJobs.isEmpty()) {
+            return 0;
+        }
+        List<Long> jobIds = myJobs.stream().map(Job::getId).collect(Collectors.toList());
+        List<JobApplication> pending = lambdaQuery()
+                .in(JobApplication::getJobId, jobIds)
+                .eq(JobApplication::getWorkerId, workerId)
+                .eq(JobApplication::getStatus, 0)
+                .list();
+        for (JobApplication application : pending) {
+            application.setStatus(3);
+            updateById(application);
+            releaseSlot(application);
+        }
+        return pending.size();
     }
 
     /**

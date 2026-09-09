@@ -66,4 +66,15 @@ public interface IJobApplicationService extends IService<JobApplication> {
      * @return 取消录用结果
      */
     Result dismiss(Long applicationId);
+
+    /**
+     * 该工人是否已被该雇主拉黑（黑名单命中则报名入口被拦）。
+     */
+    boolean isBlacklisted(Long employerId, Long workerId);
+
+    /**
+     * 雇主拉黑某工人时调用：把该工人对其所有岗位的「待确认(0)」报名自动取消并释放名额，
+     * 避免黑名单与审核矛盾。静默（不通知被打工人）。返回取消的报名条数。
+     */
+    int cancelPendingOfWorkerOnEmployer(Long employerId, Long workerId);
 }

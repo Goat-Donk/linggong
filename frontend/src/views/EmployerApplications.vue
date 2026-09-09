@@ -31,6 +31,8 @@
         <div class="app-card__foot">
           <span class="app-card__time">{{ formatDateTime(app.createTime) }}</span>
           <div class="app-card__actions">
+            <van-tag v-if="app.blacklisted" type="danger" plain class="bl-tag">已拉黑</van-tag>
+            <van-button v-else size="small" type="default" plain @click="onBlacklist(app)">拉黑</van-button>
             <van-button size="small" type="default" plain @click="goChat(app)">联系TA</van-button>
             <van-button v-if="app.status === 0" size="small" type="danger" plain @click="onReject(app)">拒绝</van-button>
             <van-button v-if="app.status === 0" size="small" type="primary" @click="onApprove(app)">通过</van-button>
@@ -50,6 +52,16 @@
 
       <van-empty v-if="finished && applications.length === 0" description="暂无待审核报名" />
     </van-list>
+
+    <!-- 拉黑原因选择（选择后立即拉黑该报名工人） -->
+    <van-action-sheet
+      v-model:show="actionShow"
+      :title="actionTitle"
+      :actions="reasonActions"
+      cancel-text="取消"
+      close-on-click-action
+      @select="onReasonSelect"
+    />
   </div>
 </template>
 
@@ -63,6 +75,7 @@ import {
   rejectApplication,
   dismissApplication
 } from '@/api/application'
+import { addBlacklist } from '@/api/blacklist'
 import { formatApplyStatus, applyStatusType, formatDateTime } from '@/utils/format'
 
 const router = useRouter()
@@ -73,6 +86,13 @@ const pageSize = 10
 const loading = ref(false)
 const finished = ref(false)
 const dismissingId = ref(null)
+
+// 拉黑原因选择（ActionSheet 组件版）
+const BLACKLIST_REASONS = ['恶意报名后取消', '录用后放鸽子', '骚扰 / 不当言行', '其他']
+const reasonActions = BLACKLIST_REASONS.map((name) => ({ name }))
+const actionShow = ref(false)
+const actionTitle = ref('')
+let blacklistTarget = null // 当前待拉黑的报名条目（仅事件触发时引用，无需响应式）
 
 async function onLoad() {
   try {
@@ -148,6 +168,27 @@ async function onDismiss(app) {
     dismissingId.value = null
   }
 }
+
+// 打开拉黑原因选择面板：先选中条目，再让用户挑原因
+function onBlacklist(app) {
+  blacklistTarget = app
+  actionTitle.value = `拉黑「${app.workerName || '该工人'}」？拉黑后其无法再报名你的岗位`
+  actionShow.value = true
+}
+
+// 用户点选某个原因 → 立即拉黑该工人（自动取消其待确认报名、静默不通知）
+async function onReasonSelect(action) {
+  const app = blacklistTarget
+  blacklistTarget = null
+  if (!app || !action?.name) return
+  try {
+    await addBlacklist(app.workerId, action.name)
+    app.blacklisted = true
+    showSuccessToast('已拉黑')
+  } catch (e) {
+    // 失败提示已由 request.js Toast（已达上限 / 重复拉黑 / 目标不是打工人等）
+  }
+}
 </script>
 
 <style scoped>
@@ -206,5 +247,9 @@ async function onDismiss(app) {
 .app-card__actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+.bl-tag {
+  align-self: center;
 }
 </style>

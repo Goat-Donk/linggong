@@ -107,6 +107,12 @@ const routes = [
     meta: { title: '审核报名', requiresAuth: true }
   },
   {
+    path: '/employer-blacklist',
+    name: 'employerBlacklist',
+    component: () => import('@/views/EmployerBlacklist.vue'),
+    meta: { title: '黑名单管理', requiresAuth: true }
+  },
+  {
     path: '/attendance/my',
     name: 'attendanceMy',
     component: () => import('@/views/AttendanceMy.vue'),

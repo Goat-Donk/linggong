@@ -96,6 +96,13 @@
         @click="$router.push('/attendance/manage')"
       />
       <van-cell
+        v-if="userState.info?.role === 1"
+        title="黑名单管理"
+        icon="closed-eye"
+        is-link
+        @click="$router.push('/employer-blacklist')"
+      />
+      <van-cell
         v-if="userState.info?.role === 0"
         title="我的报名"
         icon="orders-o"
