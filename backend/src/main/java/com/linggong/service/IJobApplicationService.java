@@ -37,4 +37,12 @@ public interface IJobApplicationService extends IService<JobApplication> {
      * @return 审核结果
      */
     Result audit(Long applicationId, boolean approve);
+
+    /**
+     * 打工人撤销报名（0 待确认 → 3 已取消），释放名额。
+     *
+     * @param applicationId 报名记录 id
+     * @return 撤销结果
+     */
+    Result cancel(Long applicationId);
 }

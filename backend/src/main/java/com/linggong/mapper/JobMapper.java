@@ -18,4 +18,14 @@ public interface JobMapper extends BaseMapper<Job> {
      */
     @Update("UPDATE tb_job SET headcount = headcount - 1 WHERE id = #{jobId} AND headcount > 0")
     int deductHeadcount(@Param("jobId") Long jobId);
+
+    /**
+     * 恢复岗位名额（headcount + 1）。撤销报名时退回一个名额，
+     * 与 {@link #deductHeadcount(Long)} 对称，保证「报名 → 撤销」后名额归位。
+     *
+     * @param jobId 岗位 id
+     * @return 影响行数
+     */
+    @Update("UPDATE tb_job SET headcount = headcount + 1 WHERE id = #{jobId}")
+    int restoreHeadcount(@Param("jobId") Long jobId);
 }

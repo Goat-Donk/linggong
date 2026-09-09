@@ -1,6 +1,6 @@
 <template>
   <div class="publish">
-    <van-nav-bar title="发布岗位" left-arrow @click-left="$router.back()" />
+    <van-nav-bar :title="isEdit ? '编辑岗位' : '发布岗位'" left-arrow @click-left="$router.back()" />
 
     <van-empty v-if="!isEmployer" description="仅雇主可发布岗位" />
 
@@ -81,11 +81,22 @@
 
       <van-cell-group inset title="担保金冻结">
         <van-cell title="当前可用余额" :value="`¥${balance}`" label="点我去充值" is-link @click="$router.push('/wallet')" />
-        <van-cell title="冻结担保金" :value="`¥${freezeAmount}`" :label="freezeFormula" />
         <van-cell
-          :title="balance >= freezeAmount ? '余额充足' : '余额不足'"
-          :value="balance >= freezeAmount ? '可直接发布' : '请先充值'"
-          :class="balance >= freezeAmount ? 'fee-ok' : 'fee-lack'"
+          v-if="!isEdit"
+          title="冻结担保金"
+          :value="`¥${freezeAmount}`"
+          :label="freezeFormula"
+        />
+        <van-cell
+          v-else
+          title="调整担保金"
+          :value="freezeDelta > 0 ? `补冻 ¥${freezeDelta}` : freezeDelta < 0 ? `释放 ¥${-freezeDelta}` : '不变'"
+          :label="`原冻结 ¥${oldFreeze} → 新冻结 ¥${freezeAmount}`"
+        />
+        <van-cell
+          :title="balance >= requiredAmount ? '余额充足' : '余额不足'"
+          :value="balance >= requiredAmount ? (isEdit && freezeDelta <= 0 ? '无需补冻' : '可直接提交') : '请先充值'"
+          :class="balance >= requiredAmount ? 'fee-ok' : 'fee-lack'"
         />
         <van-cell title="说明" label="发岗时从余额冻结 日薪×名额×天数 作为担保；结算时给打工人发工资、剩余退回，另按结算额抽 10% 服务费（雇主承担）" />
       </van-cell-group>
@@ -105,7 +116,7 @@
 
       <div class="submit">
         <van-button round block type="primary" native-type="submit" :loading="submitting">
-          发布
+          {{ isEdit ? '保存修改' : '发布' }}
         </van-button>
       </div>
     </van-form>
@@ -134,17 +145,23 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
-import { publishJob } from '@/api/job'
+import { publishJob, getJobById, updateJob } from '@/api/job'
 import { regeo } from '@/api/map'
 import { getMyWallet } from '@/api/wallet'
 import { userState } from '@/stores/user'
+import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const route = useRoute()
 
 const isEmployer = computed(() => userState.info?.role === 1)
+// 编辑模式：路由带 ?edit=岗位id 时进入编辑，预填原岗位数据
+const editId = computed(() => (route.query.edit ? Number(route.query.edit) : null))
+const isEdit = computed(() => !!editId.value)
+const oldFreeze = ref(0) // 编辑模式下原冻结金额
 
 const form = reactive({
   name: '',
@@ -174,6 +191,11 @@ const taskDays = computed(() => {
 })
 const dailySalary = computed(() => (salaryText.value ? Number(salaryText.value) : 0))
 const freezeAmount = computed(() => dailySalary.value * form.headcount * taskDays.value)
+// 编辑时只补冻差额（下调/不变则无需余额）；发布时需冻结全额
+const freezeDelta = computed(() => freezeAmount.value - oldFreeze.value)
+const requiredAmount = computed(() =>
+  isEdit.value ? Math.max(0, freezeDelta.value) : freezeAmount.value
+)
 const freezeFormula = computed(() => {
   if (!dailySalary.value) return '填写日薪后计算'
   return `日薪 ¥${dailySalary.value} × ${form.headcount} 人 × ${taskDays.value} 天`
@@ -211,7 +233,34 @@ onMounted(async () => {
       // 拉不到余额不影响填写，发布时后端仍会兜底校验
     }
   }
+  if (isEdit.value) {
+    await loadJobForEdit()
+  }
 })
+
+// 编辑模式：拉取原岗位回填表单（含坐标与冻结额，用于算担保金差额）
+async function loadJobForEdit() {
+  try {
+    const res = await getJobById(editId.value)
+    const j = res.data
+    form.name = j.name || ''
+    form.categoryId = j.categoryId ?? null
+    form.address = j.address || ''
+    form.x = j.x ?? null
+    form.y = j.y ?? null
+    form.headcount = j.headcount ?? 1
+    form.startTime = j.startTime || null
+    form.endTime = j.endTime || null
+    form.description = j.description || ''
+    salaryText.value = j.salary ? String(j.salary) : ''
+    startTimeText.value = j.startTime ? formatDateTime(j.startTime) : ''
+    endTimeText.value = j.endTime ? formatDateTime(j.endTime) : ''
+    oldFreeze.value = Number(j.frozenAmount) || 0
+    if (j.x != null && j.y != null) locatedAddress.value = j.address || '已定位'
+  } catch (e) {
+    showToast('加载岗位失败，请返回重试')
+  }
+}
 
 function onLocate() {
   if (!navigator.geolocation) {
@@ -300,8 +349,8 @@ async function onSubmit() {
     showToast('日薪需为正整数（元/天）')
     return
   }
-  if (balance.value < freezeAmount.value) {
-    showToast(`可用余额不足：需冻结 ¥${freezeAmount.value}，当前 ¥${balance.value}`)
+  if (balance.value < requiredAmount.value) {
+    showToast(`可用余额不足：需 ¥${requiredAmount.value}，当前 ¥${balance.value}`)
     return
   }
   submitting.value = true
@@ -318,9 +367,15 @@ async function onSubmit() {
       endTime: form.endTime,
       description: form.description.trim() || null
     }
-    const res = await publishJob(payload)
-    showSuccessToast('发布成功')
-    router.replace(`/job/${res.data}`)
+    if (isEdit.value) {
+      await updateJob(editId.value, payload)
+      showSuccessToast('已保存')
+      router.replace(`/job/${editId.value}`)
+    } else {
+      const res = await publishJob(payload)
+      showSuccessToast('发布成功')
+      router.replace(`/job/${res.data}`)
+    }
   } catch (e) {
     // 失败提示已由 request.js Toast（非雇主 / 时间非法 / 余额不足 / 校验失败等）
   } finally {

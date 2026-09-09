@@ -2,13 +2,18 @@ package com.linggong.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.linggong.dto.JobDTO;
 import com.linggong.dto.JobFormDTO;
+import com.linggong.dto.JobMyDTO;
 import com.linggong.dto.Result;
 import com.linggong.dto.UserDTO;
 import com.linggong.entity.Job;
+import com.linggong.entity.JobApplication;
+import com.linggong.entity.JobSettlement;
+import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.JobSettlementMapper;
 import com.linggong.service.IJobService;
@@ -38,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -61,15 +67,18 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
     private final StringRedisTemplate stringRedisTemplate;
     private final IWalletService walletService;
     private final JobSettlementMapper jobSettlementMapper;
+    private final JobApplicationMapper jobApplicationMapper;
 
     public JobServiceImpl(CacheClient cacheClient, JobBloomFilter jobBloomFilter,
                           StringRedisTemplate stringRedisTemplate, IWalletService walletService,
-                          JobSettlementMapper jobSettlementMapper) {
+                          JobSettlementMapper jobSettlementMapper,
+                          JobApplicationMapper jobApplicationMapper) {
         this.cacheClient = cacheClient;
         this.jobBloomFilter = jobBloomFilter;
         this.stringRedisTemplate = stringRedisTemplate;
         this.walletService = walletService;
         this.jobSettlementMapper = jobSettlementMapper;
+        this.jobApplicationMapper = jobApplicationMapper;
     }
 
     @Override
@@ -129,6 +138,17 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         if (jobSettlementMapper.selectByJobId(id) != null) {
             return Result.fail("岗位已结算，不能编辑");
         }
+        // 在途报名保护：有已录用或待确认的报名时禁止编辑，避免改薪资/名额/时间影响已报名工人
+        Long hiredCount = jobApplicationMapper.selectCount(new LambdaQueryWrapper<JobApplication>()
+                .eq(JobApplication::getJobId, id).eq(JobApplication::getStatus, 1));
+        if (hiredCount != null && hiredCount > 0) {
+            return Result.fail("已有录用工人在岗，不能编辑，请通过「考勤核销」结算结束岗位");
+        }
+        Long pendingCount = jobApplicationMapper.selectCount(new LambdaQueryWrapper<JobApplication>()
+                .eq(JobApplication::getJobId, id).eq(JobApplication::getStatus, 0));
+        if (pendingCount != null && pendingCount > 0) {
+            return Result.fail("有待确认的报名，请先处理报名或下架岗位");
+        }
         // 记录旧分类，用于从旧 GEO 集合移除（copyProperties 后 categoryId 可能已变）
         Long oldCategoryId = job.getCategoryId();
         // 担保差额：用「form 有则用 form、缺则沿用 DB 现值」的快照算新冻结额。
@@ -174,6 +194,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
     }
 
     @Override
+    @Transactional
     public Result offShelf(Long id) {
         Job job = getById(id);
         if (job == null) {
@@ -184,6 +205,22 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         }
         if (jobSettlementMapper.selectByJobId(id) != null) {
             return Result.fail("岗位已结算，无需重复下架");
+        }
+        // 在途报名保护：已有录用工人在岗时不能直接下架，须先结算
+        Long hiredCount = jobApplicationMapper.selectCount(new LambdaQueryWrapper<JobApplication>()
+                .eq(JobApplication::getJobId, id).eq(JobApplication::getStatus, 1));
+        if (hiredCount != null && hiredCount > 0) {
+            return Result.fail("已有录用工人在岗，不能下架，请通过「考勤核销」结算结束岗位");
+        }
+        // 下架时顺带取消待确认的报名（0→3），避免工人卡在「待确认」
+        Long pendingCount = jobApplicationMapper.selectCount(new LambdaQueryWrapper<JobApplication>()
+                .eq(JobApplication::getJobId, id).eq(JobApplication::getStatus, 0));
+        if (pendingCount != null && pendingCount > 0) {
+            JobApplication upd = new JobApplication();
+            upd.setStatus(3);
+            jobApplicationMapper.update(upd, new LambdaUpdateWrapper<JobApplication>()
+                    .eq(JobApplication::getJobId, id)
+                    .eq(JobApplication::getStatus, 0));
         }
         job.setStatus(1);
         updateById(job);
@@ -331,6 +368,43 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         int from = Math.min((page - 1) * pageSize, matched.size());
         int to = Math.min(from + pageSize, matched.size());
         return Result.ok(matched.subList(from, to), total);
+    }
+
+    @Override
+    public Result myJobs(Integer page, Integer pageSize) {
+        Long employerId = UserHolder.getUser().getId();
+        Page<Job> pageResult = lambdaQuery()
+                .eq(Job::getEmployerId, employerId)
+                .orderByDesc(Job::getCreateTime)
+                .page(new Page<>(page, pageSize));
+        List<Job> records = pageResult.getRecords();
+        if (records.isEmpty()) {
+            return Result.ok(Collections.emptyList(), pageResult.getTotal());
+        }
+        List<Long> jobIds = records.stream().map(Job::getId).collect(Collectors.toList());
+        Map<Long, Long> hiredMap = countApplicationsByStatus(jobIds, 1);
+        Map<Long, Long> pendingMap = countApplicationsByStatus(jobIds, 0);
+        Set<Long> settledIds = jobSettlementMapper.selectList(
+                        new LambdaQueryWrapper<JobSettlement>().in(JobSettlement::getJobId, jobIds))
+                .stream().map(JobSettlement::getJobId).collect(Collectors.toSet());
+        List<JobMyDTO> dtos = records.stream().map(job -> {
+            JobMyDTO dto = BeanUtil.copyProperties(job, JobMyDTO.class);
+            dto.setHiredCount(hiredMap.getOrDefault(job.getId(), 0L).intValue());
+            dto.setPendingCount(pendingMap.getOrDefault(job.getId(), 0L).intValue());
+            dto.setSettled(settledIds.contains(job.getId()));
+            return dto;
+        }).collect(Collectors.toList());
+        return Result.ok(dtos, pageResult.getTotal());
+    }
+
+    /** 统计指定岗位集合下某种报名状态的数量，返回 jobId → count 映射。 */
+    private Map<Long, Long> countApplicationsByStatus(List<Long> jobIds, int status) {
+        List<JobApplication> apps = jobApplicationMapper.selectList(
+                new LambdaQueryWrapper<JobApplication>()
+                        .in(JobApplication::getJobId, jobIds)
+                        .eq(JobApplication::getStatus, status));
+        return apps.stream().collect(Collectors.groupingBy(
+                JobApplication::getJobId, Collectors.counting()));
     }
 
     /**

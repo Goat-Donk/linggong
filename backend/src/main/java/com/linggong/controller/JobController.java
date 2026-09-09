@@ -58,6 +58,16 @@ public class JobController {
     }
 
     /**
+     * 查询当前雇主发布的岗位（分页，含报名与结算状态汇总）。
+     */
+    @Operation(summary = "查询当前雇主发布的岗位（我的岗位）")
+    @GetMapping("/my")
+    public Result myJobs(@Parameter(description = "页码，默认 1") @RequestParam(value = "page", defaultValue = "1") Integer page,
+                         @Parameter(description = "每页条数，默认 10") @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        return jobService.myJobs(page, pageSize);
+    }
+
+    /**
      * 查询岗位详情。
      */
     @Operation(summary = "查询岗位详情")

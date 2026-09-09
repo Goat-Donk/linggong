@@ -164,6 +164,14 @@ function onSearchClear() {
   searchKeyword.value = ''
 }
 
+// 清空搜索框（点 × 或手动删光）都重置为全量列表：
+// van-search 的 @clear 只在点 × 时触发，手动逐字删光不会触发，这里兜底监听输入值。
+watch(keyword, (val) => {
+  if (val.trim() === '' && searchKeyword.value !== '') {
+    searchKeyword.value = ''
+  }
+})
+
 // 薪资筛选 key → 薪资区间
 function salaryParams() {
   switch (salaryKey.value) {

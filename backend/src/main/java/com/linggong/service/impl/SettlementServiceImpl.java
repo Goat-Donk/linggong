@@ -9,6 +9,7 @@ import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.JobSettlement;
 import com.linggong.entity.JobSettlementItem;
+import com.linggong.entity.Notification;
 import com.linggong.entity.User;
 import com.linggong.mapper.AttendanceMapper;
 import com.linggong.mapper.JobApplicationMapper;
@@ -16,6 +17,7 @@ import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.JobSettlementItemMapper;
 import com.linggong.mapper.JobSettlementMapper;
 import com.linggong.mapper.UserMapper;
+import com.linggong.service.INotificationService;
 import com.linggong.service.ISettlementService;
 import com.linggong.service.IWalletService;
 import com.linggong.utils.AttendancePayUtil;
@@ -76,6 +78,7 @@ public class SettlementServiceImpl implements ISettlementService {
     private final IWalletService walletService;
     private final CacheClient cacheClient;
     private final StringRedisTemplate stringRedisTemplate;
+    private final INotificationService notificationService;
 
     /** 自代理：autoSettleExpired 逐岗结算要走事务，须经代理调用而非 this */
     @Lazy
@@ -87,7 +90,8 @@ public class SettlementServiceImpl implements ISettlementService {
                                  JobSettlementMapper jobSettlementMapper,
                                  JobSettlementItemMapper jobSettlementItemMapper,
                                  IWalletService walletService, CacheClient cacheClient,
-                                 StringRedisTemplate stringRedisTemplate) {
+                                 StringRedisTemplate stringRedisTemplate,
+                                 INotificationService notificationService) {
         this.jobMapper = jobMapper;
         this.jobApplicationMapper = jobApplicationMapper;
         this.attendanceMapper = attendanceMapper;
@@ -97,6 +101,7 @@ public class SettlementServiceImpl implements ISettlementService {
         this.walletService = walletService;
         this.cacheClient = cacheClient;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -171,6 +176,11 @@ public class SettlementServiceImpl implements ISettlementService {
                 if (!Boolean.TRUE.equals(r.getSuccess())) {
                     throw new IllegalStateException("结算发工资失败：" + r.getErrorMsg());
                 }
+                // 工资到账通知（只给有工资的工人发）
+                notificationService.notify(app.getWorkerId(), Notification.TYPE_SETTLE_WAGE,
+                        "工资到账",
+                        "岗位「" + jobName + "」结算，你收到工资 ¥" + money(wage),
+                        jobId);
             }
             JobSettlementItem item = new JobSettlementItem();
             item.setSettlementId(settlementId);
@@ -196,8 +206,9 @@ public class SettlementServiceImpl implements ISettlementService {
                     "岗位「" + jobName + "」结算退回冻结余款");
         }
 
-        // 5. 报名 1→2 已完成
+        // 5. 报名 1→2 已完成；待确认(0) 一并取消，避免结算后悬空在「待确认」
         jobApplicationMapper.finishByJob(jobId);
+        jobApplicationMapper.cancelPendingByJob(jobId);
 
         // 6. 岗位下架 + 清零冻结额 + 缓存/GEO 同步（结算后不再招聘）
         job.setStatus(1);

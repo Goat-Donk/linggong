@@ -76,4 +76,13 @@ public class JobApplicationController {
     public Result reject(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
         return jobApplicationService.audit(id, false);
     }
+
+    /**
+     * 打工人撤销报名（0 待确认 → 3 已取消）。
+     */
+    @Operation(summary = "打工人撤销报名（0 待确认 → 3 已取消）")
+    @PutMapping("/{id}/cancel")
+    public Result cancel(@Parameter(description = "报名单 id") @PathVariable("id") Long id) {
+        return jobApplicationService.cancel(id);
+    }
 }

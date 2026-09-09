@@ -17,6 +17,7 @@ import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobEvaluationService;
 import com.linggong.utils.UserHolder;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -97,14 +98,18 @@ public class JobEvaluationServiceImpl extends ServiceImpl<JobEvaluationMapper, J
             return Result.fail("您已评价过该岗位");
         }
 
-        // 5. 落库
+        // 5. 落库。唯一键 uk_job_from 兜底，并发/双击重复评价在此被拦下
         JobEvaluation evaluation = new JobEvaluation();
         evaluation.setJobId(jobId);
         evaluation.setFromUserId(fromUserId);
         evaluation.setToUserId(toUserId);
         evaluation.setRating(form.getRating());
         evaluation.setContent(form.getContent());
-        save(evaluation);
+        try {
+            save(evaluation);
+        } catch (DuplicateKeyException e) {
+            return Result.fail("您已评价过该岗位");
+        }
         return Result.ok(evaluation.getId());
     }
 

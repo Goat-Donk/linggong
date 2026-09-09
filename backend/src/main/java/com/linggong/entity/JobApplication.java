@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
  *   <li>status —— 0 待确认 / 1 已录用 / 2 已完成 / 3 已取消</li>
  * </ul>
  *
- * <p>防重复报名靠「Redis 一人一单标记 + 数据库唯一键 uk_job_worker(job_id, worker_id)」双重兜底。
+ * <p>防重复报名靠「Redis 一人一单标记（apply:order:{jobId}，Lua 原子）」主防线；
+ * 撤销/被拒后删除该标记即可再次报名，同一工人对同一岗位可有多条历史记录。
  */
 @Data
 @TableName("tb_job_application")

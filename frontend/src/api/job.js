@@ -27,3 +27,18 @@ export function getJobById(id) {
 export function publishJob(form) {
   return request.post('/job', form)
 }
+
+// 我的岗位（雇主，分页），data 为 JobMyDTO[]（含已录用/待确认人数、结算状态）
+export function getMyJobs(page, pageSize) {
+  return request.get('/job/my', { params: { page, pageSize } })
+}
+
+// 编辑岗位（仅发布者本人），form 同发布
+export function updateJob(id, form) {
+  return request.put(`/job/${id}`, form)
+}
+
+// 下架岗位（仅发布者本人）
+export function offShelfJob(id) {
+  return request.put(`/job/off/${id}`)
+}

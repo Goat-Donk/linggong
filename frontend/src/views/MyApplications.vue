@@ -35,6 +35,21 @@
           <van-icon name="clock-o" />
           <span>今日考勤 ›</span>
         </div>
+        <div
+          v-if="app.status === 0"
+          class="app-card__actions"
+        >
+          <van-button
+            size="small"
+            type="danger"
+            plain
+            round
+            :loading="cancelingId === app.id"
+            @click.stop="onCancel(app)"
+          >
+            撤销报名
+          </van-button>
+        </div>
       </div>
 
       <van-empty v-if="finished && applications.length === 0" description="还没有报名记录" />
@@ -44,7 +59,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import { getMyApplications } from '@/api/application'
+import { showConfirmDialog, showSuccessToast } from 'vant'
+import { getMyApplications, cancelApplication } from '@/api/application'
 import { formatApplyStatus, applyStatusType, formatSalary, formatDateTime } from '@/utils/format'
 
 const applications = ref([])
@@ -52,6 +68,7 @@ const page = ref(1)
 const pageSize = 10
 const loading = ref(false)
 const finished = ref(false)
+const cancelingId = ref(null)
 
 async function onLoad() {
   try {
@@ -71,6 +88,28 @@ async function onLoad() {
     finished.value = true
   } finally {
     loading.value = false
+  }
+}
+
+// 撤销待确认(0)的报名：二次确认后置为已取消(3)，名额随之释放
+async function onCancel(app) {
+  try {
+    await showConfirmDialog({
+      title: '撤销报名',
+      message: `确定撤销「${app.jobName}」的报名吗？撤销后名额会释放。`
+    })
+  } catch (e) {
+    return // 用户取消
+  }
+  cancelingId.value = app.id
+  try {
+    await cancelApplication(app.id)
+    app.status = 3 // 本地直接置为已取消，避免整页刷新
+    showSuccessToast('已撤销报名')
+  } catch (e) {
+    // 失败提示已由 request.js Toast
+  } finally {
+    cancelingId.value = null
   }
 }
 </script>
@@ -125,5 +164,12 @@ async function onLoad() {
   gap: 4px;
   font-size: 13px;
   color: var(--brand-primary);
+}
+.app-card__actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line, #ebedf0);
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

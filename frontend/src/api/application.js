@@ -24,3 +24,8 @@ export function approveApplication(id) {
 export function rejectApplication(id) {
   return request.put(`/job-application/${id}/reject`)
 }
+
+// 打工人撤销报名（0 待确认 → 3 已取消）
+export function cancelApplication(id) {
+  return request.put(`/job-application/${id}/cancel`)
+}

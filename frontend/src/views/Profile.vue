@@ -25,6 +25,12 @@
     </div>
 
     <van-cell-group inset class="menu">
+      <van-cell icon="bell" is-link @click="$router.push('/notifications')">
+        <template #title>
+          消息通知
+          <van-badge v-if="unreadCount > 0" :content="unreadCount > 99 ? '99+' : unreadCount" />
+        </template>
+      </van-cell>
       <van-cell
         title="动态"
         icon="fire-o"
@@ -55,6 +61,13 @@
         icon="plus"
         is-link
         @click="$router.push('/publish')"
+      />
+      <van-cell
+        v-if="userState.info?.role === 1"
+        title="我的岗位"
+        icon="orders-o"
+        is-link
+        @click="$router.push('/my-jobs')"
       />
       <van-cell
         v-if="userState.info?.role === 1"
@@ -110,11 +123,25 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
 import { logout as apiLogout } from '@/api/user'
+import { getUnreadCount } from '@/api/notification'
 import { clearUser, userState } from '@/stores/user'
 
 const router = useRouter()
+const unreadCount = ref(0)
+
+// 进入「我的」页拉取未读通知数，显示在「消息通知」菜单红点
+onMounted(async () => {
+  try {
+    const res = await getUnreadCount()
+    unreadCount.value = res.data ?? 0
+  } catch (e) {
+    // 拉不到未读数不影响页面
+  }
+})
 
 // 退出登录：先调后端删 token，再清本地状态，跳回登录页
 async function onLogout() {

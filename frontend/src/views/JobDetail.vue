@@ -149,6 +149,8 @@ const job = ref(null)
 const publisher = ref(null)
 const applying = ref(false)
 const applied = ref(false)
+const appStatus = ref(null) // 工人端：本人该岗位报名状态（0 待确认/1 已录用/2 已完成/3 已取消）
+const hasSettledApplicant = ref(false) // 雇主端：该岗位是否有已完成(status=2)的报名
 const loadFailed = ref(false)
 
 // 收藏状态
@@ -183,11 +185,14 @@ const applyText = computed(() => {
   return '立即报名'
 })
 
-// 谁能评价：雇主 → 选工人评；已报名工人 → 评雇主；其余不显示
+// 谁能评价：只有「报名已完成(status=2)」才进入互评。
+// 雇主端 → 岗位已结算（有已完成报名）才能选工人评；工人端 → 本人报名已完成才能评雇主。
 const evalAction = computed(() => {
   if (!job.value || !userState.token) return null
-  if (userState.info?.id === job.value.employerId) return { text: '评价工人', kind: 'worker' }
-  if (applied.value) return { text: '评价雇主', kind: 'employer' }
+  if (userState.info?.id === job.value.employerId) {
+    return hasSettledApplicant.value ? { text: '评价工人', kind: 'worker' } : null
+  }
+  if (appStatus.value === 2) return { text: '评价雇主', kind: 'employer' }
   return null
 })
 
@@ -210,9 +215,13 @@ onMounted(async () => {
   }
   // 评价列表公开可看（后端已放行 GET /evaluation）
   loadEvaluations()
-  // 已登录且非雇主：查是否已报名，决定「评价雇主」按钮 + 报名按钮状态
-  if (userState.token && userState.info?.id !== job.value.employerId) {
-    checkApplied()
+  // 已登录：查本人报名/结算状态，决定「评价」按钮 + 报名按钮状态
+  if (userState.token) {
+    if (userState.info?.id === job.value.employerId) {
+      checkEmployerApplicants()
+    } else {
+      checkApplied()
+    }
   }
   // 已登录：查是否已收藏（自己发布的岗位也允许收藏）
   if (userState.token) {
@@ -269,14 +278,28 @@ async function loadEvaluations() {
   }
 }
 
-// 查历史报名状态：让「已报名」与「评价雇主」按钮在刷新后依然正确
+// 查本人报名状态：让「已报名」与「评价雇主」按钮在刷新后依然正确。
+// 已取消(status=3)不算「已报名」，可再次报名。
 async function checkApplied() {
   try {
     const res = await getMyApplications(1, 50)
     const list = res.data || []
-    applied.value = list.some((a) => a.jobId === job.value.id)
+    const mine = list.find((a) => a.jobId === job.value.id)
+    applied.value = !!mine && mine.status !== 3
+    appStatus.value = mine ? mine.status : null
   } catch (e) {
     // 查不到报名状态不影响浏览
+  }
+}
+
+// 雇主端：查该岗位是否有已完成(status=2)的报名，决定「评价工人」按钮是否显示
+async function checkEmployerApplicants() {
+  try {
+    const res = await getEmployerApplications(1, 100)
+    const list = res.data || []
+    hasSettledApplicant.value = list.some((a) => a.jobId === job.value.id && a.status === 2)
+  } catch (e) {
+    // 查不到不影响浏览
   }
 }
 
@@ -297,9 +320,9 @@ async function openEvaluate() {
 async function loadApplicants() {
   try {
     const res = await getEmployerApplications(1, 100)
-    const list = (res.data || []).filter((a) => a.jobId === job.value.id)
+    const list = (res.data || []).filter((a) => a.jobId === job.value.id && a.status === 2)
     if (list.length === 0) {
-      showToast('该岗位还没有报名的工人')
+      showToast('该岗位结算前暂无可评价的工人')
       return
     }
     workerActions.value = list.map((a) => ({

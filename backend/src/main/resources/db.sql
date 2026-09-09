@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS `tb_job_application` (
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_job_worker` (`job_id`, `worker_id`),
+    KEY `idx_job` (`job_id`),
     KEY `idx_worker` (`worker_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '报名记录表';
 
@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS `tb_job_evaluation` (
     `content`      varchar(1024) NOT NULL DEFAULT '' COMMENT '评价内容',
     `create_time`  datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_job_from` (`job_id`, `from_user_id`),
     KEY `idx_job` (`job_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '互评表';
 
@@ -210,6 +211,20 @@ CREATE TABLE IF NOT EXISTS `tb_job_settlement_item` (
     KEY `idx_settlement` (`settlement_id`),
     KEY `idx_worker` (`worker_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '结算工人明细表';
+
+-- ---------- 16. 站内通知表（审核结果、结算工资等被动通知） ----------
+CREATE TABLE IF NOT EXISTS `tb_notification` (
+    `id`          bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     bigint       NOT NULL COMMENT '接收人 id',
+    `type`        varchar(32)  NOT NULL COMMENT '类型：APPLY_APPROVED报名录用 / APPLY_REJECTED报名拒绝 / SETTLE_WAGE工资到账',
+    `title`       varchar(128) NOT NULL COMMENT '标题',
+    `content`     varchar(512) NOT NULL DEFAULT '' COMMENT '内容',
+    `biz_id`      bigint       DEFAULT NULL COMMENT '关联业务 id（岗位 id），用于跳转',
+    `read_flag`   tinyint      NOT NULL DEFAULT 0 COMMENT '是否已读：0未读 1已读',
+    `create_time` datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '站内通知表';
 
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）

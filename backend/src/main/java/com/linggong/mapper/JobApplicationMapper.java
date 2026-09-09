@@ -17,4 +17,13 @@ public interface JobApplicationMapper extends BaseMapper<JobApplication> {
      */
     @Update("UPDATE tb_job_application SET status = 2 WHERE job_id = #{jobId} AND status = 1")
     int finishByJob(@Param("jobId") Long jobId);
+
+    /**
+     * 结算/下架时把某岗位下所有「待确认(0)」报名批量转「已取消(3)」，
+     * 避免岗位结束后报名悬空在「待确认」无人处理。
+     *
+     * @return 影响行数
+     */
+    @Update("UPDATE tb_job_application SET status = 3 WHERE job_id = #{jobId} AND status = 0")
+    int cancelPendingByJob(@Param("jobId") Long jobId);
 }

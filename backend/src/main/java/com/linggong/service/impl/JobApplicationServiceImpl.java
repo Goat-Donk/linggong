@@ -11,11 +11,13 @@ import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
+import com.linggong.entity.Notification;
 import com.linggong.entity.User;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobApplicationService;
+import com.linggong.service.INotificationService;
 import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RedisIdWorker;
@@ -27,6 +29,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
@@ -57,11 +60,12 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final RabbitTemplate rabbitTemplate;
     private final DefaultRedisScript<Long> seckillScript;
     private final RedissonClient redissonClient;
+    private final INotificationService notificationService;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
                                      RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
-                                     RedissonClient redissonClient) {
+                                     RedissonClient redissonClient, INotificationService notificationService) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -69,6 +73,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         this.rabbitTemplate = rabbitTemplate;
         this.seckillScript = seckillScript;
         this.redissonClient = redissonClient;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -207,6 +212,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     }
 
     @Override
+    @Transactional
     public Result audit(Long applicationId, boolean approve) {
         Long employerId = UserHolder.getUser().getId();
         // 分布式锁：锁定单条报名记录，把「读 → 判断 → 更新」整体包进锁内，
@@ -232,10 +238,65 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
             // 3. 状态流转：通过 → 已录用(1)，拒绝 → 已取消(3)
             application.setStatus(approve ? 1 : 3);
             updateById(application);
+            // 拒绝时释放名额：报名时已扣 DB headcount + Redis 秒杀名额，被拒须对称退回，
+            // 否则名额被「被拒的报名」永久占用，岗位无法再招满。
+            if (!approve) {
+                releaseSlot(application);
+            }
+            // 4. 站内通知：把审核结果推送给工人，bizId 关联岗位便于跳转
+            notificationService.notify(application.getWorkerId(),
+                    approve ? Notification.TYPE_APPLY_APPROVED : Notification.TYPE_APPLY_REJECTED,
+                    approve ? "报名已录用" : "报名未通过",
+                    approve ? "你报名的岗位「" + job.getName() + "」已被录用，请按时到岗"
+                            : "你报名的岗位「" + job.getName() + "」未通过审核",
+                    application.getJobId());
             return Result.ok();
         } finally {
             lock.unlock();
         }
+    }
+
+    @Override
+    @Transactional
+    public Result cancel(Long applicationId) {
+        // 角色边界：只有打工人（role=0）能撤销自己的报名
+        Integer role = UserHolder.getUser().getRole();
+        if (role == null || role != 0) {
+            return Result.fail("只有打工人可以撤销报名");
+        }
+        Long workerId = UserHolder.getUser().getId();
+        JobApplication application = getById(applicationId);
+        if (application == null) {
+            return Result.fail("报名记录不存在");
+        }
+        if (!application.getWorkerId().equals(workerId)) {
+            return Result.fail("只能撤销自己的报名");
+        }
+        if (application.getStatus() == null || application.getStatus() != 0) {
+            return Result.fail("该报名已处理，无法撤销");
+        }
+        // 1. 状态流转：0 待确认 → 3 已取消
+        application.setStatus(3);
+        updateById(application);
+        // 2. 释放名额：DB headcount + Redis 秒杀名额 + 一人一单标记（撤销后允许再次报名）
+        releaseSlot(application);
+        return Result.ok();
+    }
+
+    /**
+     * 释放一个名额：报名 0→3（打工人撤销 / 雇主拒绝）时调用，对称于报名时的
+     * deductHeadcount + Lua 扣 stock，避免名额被已取消的报名永久占用。
+     * Redis 名额是软缓存，DB headcount 才是最终真实值，二者都退回保持一致。
+     */
+    private void releaseSlot(JobApplication application) {
+        jobMapper.restoreHeadcount(application.getJobId());
+        String stockKey = RedisConstants.APPLY_STOCK_KEY + application.getJobId();
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(stockKey))) {
+            stringRedisTemplate.opsForValue().increment(stockKey, 1);
+        }
+        stringRedisTemplate.opsForSet().remove(
+                RedisConstants.APPLY_ORDER_KEY + application.getJobId(),
+                String.valueOf(application.getWorkerId()));
     }
 
     /**
