@@ -9,6 +9,7 @@ import com.linggong.dto.EvaluationFormDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
+import com.linggong.entity.CreditLog;
 import com.linggong.entity.JobEvaluation;
 import com.linggong.entity.User;
 import com.linggong.mapper.JobApplicationMapper;
@@ -116,7 +117,10 @@ public class JobEvaluationServiceImpl extends ServiceImpl<JobEvaluationMapper, J
             return Result.fail("您已评价过该岗位");
         }
         // 信用分联动：按评分折算被评价人的信用分（5★+2 / 4★+1 / 3★不变 / 1~2★−3）
-        userInfoService.adjustCredit(toUserId, CreditRules.deltaByRating(form.getRating()));
+        int delta = CreditRules.deltaByRating(form.getRating());
+        String remark = delta > 0 ? "收到 " + form.getRating() + " 星好评"
+                : delta < 0 ? "收到 " + form.getRating() + " 星差评" : "互评 " + form.getRating() + " 星";
+        userInfoService.adjustCredit(toUserId, delta, CreditLog.TYPE_EVALUATION, jobId, remark);
         return Result.ok(evaluation.getId());
     }
 

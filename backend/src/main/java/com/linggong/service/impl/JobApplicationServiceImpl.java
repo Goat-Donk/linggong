@@ -10,6 +10,7 @@ import com.linggong.dto.EmployerApplicationDTO;
 import com.linggong.dto.JobApplicationDTO;
 import com.linggong.dto.Result;
 import com.linggong.entity.Attendance;
+import com.linggong.entity.CreditLog;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.Notification;
@@ -372,7 +373,9 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
             releaseSlot(application);
             // 信用分联动：单方解除录用属「放鸽子」，扣发起方信用分（工人放弃扣工人、雇主取消扣雇主）
             Long breaker = workerQuit ? application.getWorkerId() : job.getEmployerId();
-            userInfoService.adjustCredit(breaker, CreditRules.BREAK_PENALTY);
+            String breakRemark = workerQuit ? "放弃已录用岗位「" + job.getName() + "」" : "单方取消录用岗位「" + job.getName() + "」";
+            userInfoService.adjustCredit(breaker, CreditRules.BREAK_PENALTY,
+                    CreditLog.TYPE_BREAK_HIRE, job.getId(), breakRemark);
             if (workerQuit) {
                 notificationService.notify(job.getEmployerId(), Notification.TYPE_APPLY_QUIT, "工人放弃录用",
                         "打工人已放弃岗位「" + job.getName() + "」，名额已释放，可继续招人", job.getId());

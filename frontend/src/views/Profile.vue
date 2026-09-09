@@ -62,6 +62,12 @@
         @click="$router.push('/wallet')"
       />
       <van-cell
+        title="信用详情"
+        icon="medal-o"
+        is-link
+        @click="$router.push('/credit')"
+      />
+      <van-cell
         v-if="userState.info?.role === 1"
         title="发布岗位"
         icon="plus"

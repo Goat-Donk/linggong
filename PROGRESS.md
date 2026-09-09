@@ -306,11 +306,15 @@ d:\linggong\
 
 - Step12 汇总卡片 —— [db.sql](d:/linggong/backend/src/main/resources/db.sql) 无新表，聚合 SQL 实现。后端：`WalletLogMapper` 加 COALESCE SUM 聚合（sumAmount/sumAmountSince）、`JobMapper` sumFrozenByEmployer、`JobSettlementMapper` sumServiceFeeByEmployer、`WalletSummaryDTO`（balance/totalIncome/totalWithdraw/monthIncome）、`EmployerSummaryDTO`（totalJobs/hiringJobs/frozenAmount/settledJobs/totalServiceFee）、`IWalletService.summary`（本月1号起）、`IJobService.employerSummary`（角色门禁）、`WalletController` GET /wallet/summary、`JobController` GET /job/my-summary。前端：[Wallet.vue](d:/linggong/frontend/src/views/Wallet.vue) 打工人收入汇总卡（累计/本月到账工资 + 累计提现）、[MyJobs.vue](d:/linggong/frontend/src/views/MyJobs.vue) 雇主经营汇总条（累计发岗/招聘中/冻结担保/已结算岗位/累计服务费）。`mvn compile` + `npm run build` 通过，E2E 数字对库核对全一致、角色门禁通过。**后端改动需重启、前端需硬刷新**。
 
+- 信用治理 Step1 信用流水明细表（地基）—— [db.sql](d:/linggong/backend/src/main/resources/db.sql) 加表 19 `tb_user_credit_log`（user_id 变动对象 + reason_type 原因 EVALUATION互评/BREAK_HIRE放鸽子 + change_amount clamp后真实差值 + after_credit 变动后快照 + biz_id 业务id + remark 说明，倒序分页）。后端：`CreditLog` 实体（TYPE_* 常量）、`CreditLogMapper`、[IUserInfoService.adjustCredit](d:/linggong/backend/src/main/java/com/linggong/service/IUserInfoService.java) 签名扩为 `(userId, delta, reasonType, bizId, remark)` 并在**单点收口**记流水（真实变动为 0 不记，避免上下限噪声）；`myCredit`/`creditLogs` 新接口；[JobEvaluationServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobEvaluationServiceImpl.java) 互评落库后按好评/差评生成 remark 再调分、[JobApplicationServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobApplicationServiceImpl.java) breakHire 按放弃/取消生成 remark；新增 `CreditController`（GET /credit/my 当前分、GET /credit/logs 我的流水，前缀不在匿名白名单需登录）。前端：`api/credit.js`、`views/Credit.vue`（信用分卡按分数档变底色 + 变动规则说明卡 + 流水 van-list：原因 tag/±分变色/变后分/时间）、`router` 加 /credit、[Profile.vue](d:/linggong/frontend/src/views/Profile.vue) 菜单加「信用详情」。`mvn compile` + `npm run build` 通过；E2E 全通过：worker101 评雇主 5★ → 雇主 51 信用 90→92 + EVALUATION 流水（+2，remark「收到 5 星好评」UTF-8 正确）→ 发新岗报名录用后 quit → 101 信用 87→77 + BREAK_HIRE 流水（−10）→ /credit/logs 返回该行 → /credit/my=77 → 匿名 401；测试数据全清理（岗位/报名/钱包/信用流水复原）。**后端改动需重启、前端需硬刷新**。
+
 ### 🔄 进行中
-- 无。
+- 信用治理 Step2 雇主低信用 → 岗位曝光降权（默认列表信用加权综合排序）。
 
 ### ⏭ 下一步
-- 信用治理（让信用分真正产生业务后果，三层正交设计）：① **信用流水明细表** `tb_user_credit_log`（每次 adjustCredit 记一条：谁/何时/±分/原因/业务 id，个人可查）；② **雇主低信用 → 岗位曝光降权**（默认列表改信用加权综合排序）；③ **雇主拉黑打工人**（黑名单表 + 报名拦截 + 防滥用上限 + 可解除 + 静默不通知）；④ 雇主审核报名时可见工人信用分 + 放鸽子标记（撮合透明度，可选）。顺序：先补 PROGRESS（本步）→ ①→②→③→④，每步一 commit。
+- 信用治理 Step2：雇主低信用 → 岗位曝光降权（默认列表信用加权综合排序，低信用雇主岗位沉底）。
+- 信用治理 Step3：雇主拉黑打工人（黑名单表 + 报名拦截 + 防滥用上限 + 可解除 + 静默不通知）。
+- 信用治理 Step4：雇主审核报名时可见工人信用分 + 放鸽子标记（撮合透明度）。
 
 ---
 

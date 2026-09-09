@@ -255,6 +255,20 @@ CREATE TABLE IF NOT EXISTS `tb_chat_message` (
     KEY `idx_conversation` (`conversation_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '聊天消息表';
 
+-- ---------- 19. 信用分流水表（每次信用分变动记一条，供本人追溯 / 审计） ----------
+CREATE TABLE IF NOT EXISTS `tb_user_credit_log` (
+    `id`           bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`      bigint       NOT NULL COMMENT '信用分变动对象 id',
+    `reason_type`  varchar(32)  NOT NULL COMMENT '变动原因：EVALUATION互评 / BREAK_HIRE放鸽子(单方解除)',
+    `change_amount` int         NOT NULL COMMENT '实际变动分（正加负减，clamp 后真实差值）',
+    `after_credit` int          NOT NULL COMMENT '变动后信用分',
+    `biz_id`       bigint       DEFAULT NULL COMMENT '关联业务 id（岗位 id）',
+    `remark`       varchar(255) NOT NULL DEFAULT '' COMMENT '备注说明',
+    `create_time`  datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '信用分流水表';
+
 -- ============================================================
 -- 种子数据（可选，方便后续开发测试）
 -- ============================================================
