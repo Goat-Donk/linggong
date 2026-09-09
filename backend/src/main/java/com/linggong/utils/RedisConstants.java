@@ -53,6 +53,9 @@ public final class RedisConstants {
     /** 岗位收藏集合 key 前缀，完整 key = job:favorites:{userId}（Set，存收藏岗位 id） */
     public static final String JOB_FAVORITES_KEY = "job:favorites:";
 
+    /** 接口限流 key 前缀，完整 key = rate:limit:{全类名.方法名}[:userId|:ip]（ZSet，member 存请求时间戳） */
+    public static final String RATE_LIMIT_KEY = "rate:limit:";
+
     private RedisConstants() {
     }
 }

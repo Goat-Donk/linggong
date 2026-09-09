@@ -1,6 +1,7 @@
 package com.linggong.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.linggong.annotation.RateLimiter;
 import com.linggong.dto.LoginFormDTO;
 import com.linggong.dto.Result;
 import com.linggong.dto.UserDTO;
@@ -44,6 +45,7 @@ public class UserController {
      * 发送登录验证码（模拟短信，验证码存 Redis，2 分钟有效）。
      */
     @Operation(summary = "发送登录验证码（存 Redis，2 分钟有效）")
+    @RateLimiter(window = 60, limit = 10, type = RateLimiter.LimitType.IP, message = "发送过于频繁，请稍后再试")
     @PostMapping("/code")
     public Result sendCode(@Parameter(description = "手机号") @RequestParam("phone") String phone) {
         return userService.sendCode(phone);

@@ -1,5 +1,6 @@
 package com.linggong.controller;
 
+import com.linggong.annotation.RateLimiter;
 import com.linggong.dto.Result;
 import com.linggong.service.IJobApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +35,7 @@ public class JobApplicationController {
      * @return 报名结果，成功时 data 为报名单号（字符串，雪花 ID 避免 JS 精度丢失）
      */
     @Operation(summary = "报名岗位（Lua 秒杀 + MQ 异步落单）")
+    @RateLimiter(window = 5, limit = 10, type = RateLimiter.LimitType.USER, message = "操作过于频繁，请稍后再试")
     @PostMapping("/{jobId}")
     public Result apply(@Parameter(description = "岗位 id") @PathVariable("jobId") Long jobId) {
         return jobApplicationService.apply(jobId);

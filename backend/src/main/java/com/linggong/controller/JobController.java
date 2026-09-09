@@ -1,5 +1,6 @@
 package com.linggong.controller;
 
+import com.linggong.annotation.RateLimiter;
 import com.linggong.dto.JobFormDTO;
 import com.linggong.dto.Result;
 import com.linggong.service.IJobService;
@@ -89,6 +90,7 @@ public class JobController {
      * 附近岗位搜索（按距离升序，半径单位米）。
      */
     @Operation(summary = "附近岗位搜索（按距离升序，GEO）")
+    @RateLimiter(window = 1, limit = 100, type = RateLimiter.LimitType.METHOD, message = "访问过于频繁，请稍后再试")
     @GetMapping("/nearby")
     public Result queryNearby(@Parameter(description = "分类 id") @RequestParam("categoryId") Long categoryId,
                               @Parameter(description = "经度") @RequestParam("x") Double x,

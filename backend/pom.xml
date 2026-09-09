@@ -111,10 +111,10 @@
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
         </dependency>
-        <!-- AOP（后续日志/切面用） -->
+        <!-- AOP：限流切面（@RateLimiter）依赖注解式切面，需 starter 才自动开启代理 -->
         <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjweaver</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
 
         <!-- Lombok -->

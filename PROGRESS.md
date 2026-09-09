@@ -318,11 +318,13 @@ d:\linggong\
 
 - 飞书产品与技术文档 v2.0 全量版 —— 无代码改动，对外交付物。用户拍板：**不再加功能**，写一份完整详细的飞书云文档（产品功能 + 技术方案），建在个人空间·我的文档，范围=全量快照（不含开发演进史）。整合 `docs/产品与技术文档.md`（早期 8 表 8 模块版）+ PROGRESS 到**当前代码事实**（20 表 / 69 端点 18 Controller / role 单身份不可切换 / 无签到模块 / 岗位 0上架·1下架 / 报名 0~3 / 考勤 on·off 各 0未申请1待核销2通过3驳回 / 计薪 双过=1天·仅on=0.5天 / 结算 发工资+10%服务费+退款 封口）。用官方 `@larksuite/cli`（lark-cli docs +create，--doc-format markdown，parent my_library）创建，回读校验 11 主章节/18 Controller 小节/69 端点行全部到位。文档结构：①概述定位 ②核心领域模型(状态机/口径) ③产品功能 ④演示账号与剧本 ⑤技术架构部署 ⑥数据模型20表+Redis Key+MQ ⑦核心技术实现 ⑧接口清单 ⑨安全一致性 ⑩部署FAQ ⑪与黑马点评差异。**链接**：https://my.feishu.cn/docx/XQNDdDXd8o3NgFxNtXpcV5Vsnnf （仓库 `docs/产品与技术文档.md` 保留不动，作历史版）。
 
+- 新增注解限流（Redis Lua 滑动窗口 + AOP + 自定义注解）—— 为简历句「Redis + AOP + 注解滑动窗口限流（全局/IP/用户多维度）」补**真实代码背书**（此前全工程零切面、零自定义注解，aspectjweaver 只在 pom 未使用）。后端：[pom.xml](d:/linggong/backend/pom.xml) 裸引 aspectjweaver 换成 `spring-boot-starter-aop`（aspectjweaver 单独引不激活注解式 AOP）；新增 `annotation/RateLimiter.java`（全工程首个自定义注解：window 秒/limit 次数/message/type 四属性 + 内置 `enum LimitType { METHOD, IP, USER }`，`@Target(METHOD)@Retention(RUNTIME)`）、`aspect/RateLimiterAspect.java`（`@Around("@annotation(rateLimiter)")` 构造器注入 StringRedisTemplate；key=`rate:limit:{全类名.方法名}`：METHOD 无后缀 / USER 拼 `UserHolder.getUser().getId()` 空则降级为 IP / IP 拼 X-Forwarded-For 首段→RemoteAddr；static DefaultRedisScript 执行 Lua，member=时间戳-随机；返回 0 抛 `RateLimiterException` 否则放行）、`exception/RateLimiterException.java`、[resources/lua/rate_limiter.lua](d:/linggong/backend/src/main/resources/lua/rate_limiter.lua)（原子：ZREMRANGEBYSCORE 清窗口外 → ZCARD 计数 → <limit 则 ZADD+EXPIRE 返回 1 / 超限返回 0）、`RedisConstants` 加 `RATE_LIMIT_KEY`、`WebExceptionAdvice` 加 RateLimiterException handler（须在 RuntimeException 兜底前，否则被吞成服务器异常）。挂点三处正好三维度：报名 `POST /job-application/{jobId}`（USER 5s/10 防刷抢岗）、发验证码 `POST /user/code`（IP 60s/10 防短信轰炸，免登录）、附近搜索 `GET /job/nearby`（METHOD 1s/100 防爬虫/过载）。不改动原报名/发码/查询逻辑（超限才短路，未超限零改动）。`mvn compile` 通过；E2E 三维度并发突刺全过（METHOD 150 发→100 放行/50 限流、USER 20 发→10 限流、IP 25 发→18 限流；放行数与阈值一致），限流 key 为 ZSet 带 TTL、窗口滑过后自动恢复（2s 后单发 success）。测试数据已清（rate:limit:* key 全删；突刺暴露 job200 报名 Redis `apply:order` 集合与 DB 漂移——104 不在集合、并发首放绕过一人一单落 1 条重复行，为既有预置状态问题非限流器缺陷，重复行已删）。**后端改动需重启，前端无需改动**。
+
 ### 🔄 进行中
-- 无（整体回归联调 + 飞书 v2.0 全量文档均完成）。
+- 无（注解限流已完成并通过三维度 E2E 验证）。
 
 ### ⏭ 下一步
-- 无明确下一项。如需可：浏览器 UI 手工走查、演示数据收尾清理（job246 残留考勤行/聊天演示数据/未跟踪 chat_demo_data.sql 处置）、或按用户新需求进入新方向。
+- 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（含本次「注解+AOP+Redis ZSet 滑动窗口限流，支持全局/IP/用户维度」一句），功能归入项目简介。演示数据收尾清理（job246 残留考勤行/聊天演示数据/未跟踪 chat_demo_data.sql 处置）。
 
 ---
 
