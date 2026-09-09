@@ -63,14 +63,19 @@ CREATE TABLE IF NOT EXISTS `tb_job` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '零工岗位表';
 
 -- ---------- 5. 报名记录表（订单，id 由 RedisIdWorker 雪花算法生成） ----------
+-- 一人一单双保险：Redis Lua 原子判重（seckill.lua sismember apply:order）为主，
+-- 下方生成列 active_flag + 唯一键 uk_job_worker_active 做 DB 层兜底——
+-- 进行中(0待确认/1已录用)=1 仅允许一条；终态(2/3)自动变 NULL，MySQL 唯一索引允许多个 NULL，历史多条不受限。
 CREATE TABLE IF NOT EXISTS `tb_job_application` (
     `id`          bigint   NOT NULL COMMENT '主键（雪花算法生成，不用自增）',
     `job_id`      bigint   NOT NULL COMMENT '岗位 id',
     `worker_id`   bigint   NOT NULL COMMENT '打工人 id',
     `status`      tinyint  NOT NULL DEFAULT 0 COMMENT '状态：0待确认 1已录用 2已完成 3已取消',
+    `active_flag` tinyint  GENERATED ALWAYS AS (IF(`status` IN (0,1), 1, NULL)) STORED COMMENT '进行中标记（生成列，随 status 自动重算）：1=进行中 0/1；NULL=终态 2/3',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_job_worker_active` (`job_id`, `worker_id`, `active_flag`),
     KEY `idx_job` (`job_id`),
     KEY `idx_worker` (`worker_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '报名记录表';

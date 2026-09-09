@@ -16,6 +16,7 @@ import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +29,8 @@ import java.nio.charset.StandardCharsets;
  * <p>关键设计：
  * <ul>
  *   <li>幂等：以报名单号（主键）判重，重复消息直接 ACK 丢弃，保证消费不产生重复记录；</li>
+ *   <li>一人一单 DB 兜底：表唯一键 uk_job_worker_active 保证「同岗同工人仅一条进行中报名」，
+ *       即便 Redis apply:order 漂移导致 Lua 放行，重复落单也会在此撞唯一键被静默丢弃（补回 Redis 名额）；</li>
  *   <li>黑名单兜底：HTTP 报名时已校验一次，此处再兜底「校验后 → 落单前」雇主拉黑的极小竞态，
  *       命中则静默拒绝（不落库、不扣 DB 名额），并归还 Lua 已扣的 Redis 名额后 ACK；</li>
  *   <li>手动 ACK：落单成功 basicAck；落单异常 basicNack(requeue=false) 进死信队列，避免丢失；</li>
@@ -84,7 +87,19 @@ public class JobApplicationConsumer {
             application.setJobId(msg.getJobId());
             application.setWorkerId(msg.getWorkerId());
             application.setStatus(0);
-            jobApplicationMapper.insert(application);
+            try {
+                jobApplicationMapper.insert(application);
+            } catch (DuplicateKeyException e) {
+                // 一人一单 DB 兜底（uk_job_worker_active：同岗同工人仅一条进行中报名）：
+                // 走到这说明 Redis apply:order 与 DB 漂移、Lua 放行了本不该放行的重复报名。
+                // 处理：补回 Lua 多扣的 Redis 名额；把该工人补回 apply:order（DB 确实已有其
+                // 进行中报名，成员应存在，使后续重复报名在 Lua return2 层被拦）；不落库、ACK。
+                log.info("报名落单撞一人一单 DB 唯一键（同岗同工人已有进行中报名），静默丢弃并归还名额，jobId={}, workerId={}",
+                        msg.getJobId(), msg.getWorkerId());
+                restoreStockForDuplicate(msg);
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
 
             // 5. 扣 DB 名额（headcount > 0 才扣，防止负数）
             int rows = jobMapper.deductHeadcount(msg.getJobId());
@@ -120,6 +135,22 @@ public class JobApplicationConsumer {
             stringRedisTemplate.opsForValue().increment(stockKey, 1);
         }
         stringRedisTemplate.opsForSet().remove(
+                RedisConstants.APPLY_ORDER_KEY + msg.getJobId(),
+                String.valueOf(msg.getWorkerId()));
+        cacheClient.delete(RedisConstants.CACHE_JOB_KEY + msg.getJobId());
+    }
+
+    /**
+     * 一人一单 DB 兜底归还：与 {@link #restoreStock} 的差异是**不移除** apply:order 成员，
+     * 反而要**补回**（SADD 幂等）——因为撞唯一键说明该工人 DB 里确实已有进行中报名，
+     * 集合成员应存在，补回后后续重复报名直接由 Lua return2 拦截，Redis 状态回归与 DB 一致。
+     */
+    private void restoreStockForDuplicate(ApplyMessage msg) {
+        String stockKey = RedisConstants.APPLY_STOCK_KEY + msg.getJobId();
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(stockKey))) {
+            stringRedisTemplate.opsForValue().increment(stockKey, 1);
+        }
+        stringRedisTemplate.opsForSet().add(
                 RedisConstants.APPLY_ORDER_KEY + msg.getJobId(),
                 String.valueOf(msg.getWorkerId()));
         cacheClient.delete(RedisConstants.CACHE_JOB_KEY + msg.getJobId());
