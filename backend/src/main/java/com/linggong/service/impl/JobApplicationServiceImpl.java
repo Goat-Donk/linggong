@@ -18,6 +18,7 @@ import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.UserMapper;
 import com.linggong.service.IJobApplicationService;
 import com.linggong.service.INotificationService;
+import com.linggong.utils.CacheClient;
 import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
 import com.linggong.utils.RedisIdWorker;
@@ -61,11 +62,13 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
     private final DefaultRedisScript<Long> seckillScript;
     private final RedissonClient redissonClient;
     private final INotificationService notificationService;
+    private final CacheClient cacheClient;
 
     public JobApplicationServiceImpl(JobMapper jobMapper, UserMapper userMapper,
                                      StringRedisTemplate stringRedisTemplate, RedisIdWorker redisIdWorker,
                                      RabbitTemplate rabbitTemplate, DefaultRedisScript<Long> seckillScript,
-                                     RedissonClient redissonClient, INotificationService notificationService) {
+                                     RedissonClient redissonClient, INotificationService notificationService,
+                                     CacheClient cacheClient) {
         this.jobMapper = jobMapper;
         this.userMapper = userMapper;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -74,6 +77,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         this.seckillScript = seckillScript;
         this.redissonClient = redissonClient;
         this.notificationService = notificationService;
+        this.cacheClient = cacheClient;
     }
 
     @Override
@@ -297,6 +301,8 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         stringRedisTemplate.opsForSet().remove(
                 RedisConstants.APPLY_ORDER_KEY + application.getJobId(),
                 String.valueOf(application.getWorkerId()));
+        // 名额已恢复，删岗位详情缓存，避免「已取消报名仍占名额」的旧值误导（最长 30 分钟）
+        cacheClient.delete(RedisConstants.CACHE_JOB_KEY + application.getJobId());
     }
 
     /**
