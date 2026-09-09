@@ -9,7 +9,8 @@ package com.linggong.utils;
  *   <li>{@link #FREEZE} 冻结：雇主发岗时担保金从可用余额转出（负出账）；</li>
  *   <li>{@link #UNFREEZE} 解冻：结算后退还冻结剩余（正入账）；</li>
  *   <li>{@link #SALARY} 工资：结算时给打工人发工资（打工人正入账，雇主不记工资流水）；</li>
- *   <li>{@link #SERVICE_FEE} 服务费：结算时平台抽成 10%，由雇主承担（雇主负出账）。</li>
+ *   <li>{@link #SERVICE_FEE} 服务费：结算时平台抽成 10%，由雇主承担（雇主负出账）；</li>
+ *   <li>{@link #WITHDRAW} 提现：用户把可用余额提现出金（负出账），与充值对称。</li>
  * </ul>
  */
 public final class WalletLogType {
@@ -28,6 +29,9 @@ public final class WalletLogType {
 
     /** 服务费（结算平台抽成，雇主承担） */
     public static final String SERVICE_FEE = "服务费";
+
+    /** 提现（用户可用余额出金） */
+    public static final String WITHDRAW = "提现";
 
     private WalletLogType() {
     }

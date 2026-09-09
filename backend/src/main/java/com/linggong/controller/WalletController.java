@@ -49,6 +49,17 @@ public class WalletController {
     }
 
     /**
+     * 模拟提现（可用余额减 amount 并记「提现」流水；余额不足/超上限返回失败）。
+     *
+     * @param amount 提现金额（元），正整数
+     */
+    @Operation(summary = "模拟提现")
+    @PostMapping("/withdraw")
+    public Result withdraw(@Parameter(description = "提现金额（元）") @RequestParam("amount") Integer amount) {
+        return walletService.withdraw(amount);
+    }
+
+    /**
      * 我的钱包流水（分页，按时间倒序）。
      */
     @Operation(summary = "我的钱包流水（分页）")

@@ -12,6 +12,11 @@ export function rechargeWallet(amount) {
   return request.post('/wallet/recharge', null, { params: { amount } })
 }
 
+// 模拟提现（元），成功后 data 为最新钱包 { balance }
+export function withdrawWallet(amount) {
+  return request.post('/wallet/withdraw', null, { params: { amount } })
+}
+
 // 我的钱包流水（分页，按时间倒序），data 为 WalletLogDTO[]：type/amount/balanceAfter/bizId/remark/createTime
 export function getWalletLogs(page, pageSize) {
   return request.get('/wallet/logs', { params: { page, pageSize } })

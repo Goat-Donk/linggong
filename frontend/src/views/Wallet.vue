@@ -8,17 +8,29 @@
       <div class="balance-card__amount">
         <span class="balance-card__yen">¥</span>{{ balance }}
       </div>
-      <div class="balance-card__tip">发岗担保金冻结 / 工资结算都在这里记账</div>
-      <van-button
-        class="balance-card__recharge"
-        round
-        size="small"
-        plain
-        color="#fff"
-        @click="openRecharge"
-      >
-        充值
-      </van-button>
+      <div class="balance-card__tip">工资到账后想提现，点右上「提现」</div>
+      <div class="balance-card__actions">
+        <van-button
+          class="balance-card__btn"
+          round
+          size="small"
+          plain
+          color="#fff"
+          @click="openDialog('recharge')"
+        >
+          充值
+        </van-button>
+        <van-button
+          class="balance-card__btn"
+          round
+          size="small"
+          plain
+          color="#fff"
+          @click="openDialog('withdraw')"
+        >
+          提现
+        </van-button>
+      </div>
     </div>
 
     <!-- 流水列表 -->
@@ -49,10 +61,13 @@
       <van-empty v-if="finished && logs.length === 0" description="还没有资金流水" />
     </van-list>
 
-    <!-- 充值弹层 -->
-    <van-popup v-model:show="rechargeShow" position="bottom" round>
+    <!-- 充值 / 提现弹层（共用一套表单，按 mode 区分） -->
+    <van-popup v-model:show="dialogShow" position="bottom" round>
       <div class="recharge-form">
-        <h4 class="recharge-form__title">模拟充值</h4>
+        <h4 class="recharge-form__title">{{ dialogTitle }}</h4>
+        <div v-if="mode === 'withdraw' && balance > 0" class="recharge-form__max" @click="amountInput = balance">
+          可提现余额 ¥{{ balance }}，点此填入
+        </div>
         <div class="recharge-form__presets">
           <span
             v-for="v in presets"
@@ -66,7 +81,7 @@
         <van-field
           v-model="amountInput"
           type="number"
-          placeholder="输入充值金额"
+          :placeholder="mode === 'withdraw' ? '输入提现金额' : '输入充值金额'"
           label="金额"
           :formatter="(v) => v.replace(/\D/g, '')"
         />
@@ -74,11 +89,11 @@
           class="recharge-form__submit"
           round
           block
-          type="primary"
+          :type="mode === 'withdraw' ? 'danger' : 'primary'"
           :loading="submitting"
-          @click="submitRecharge"
+          @click="submitDialog"
         >
-          确认充值
+          {{ dialogSubmitText }}
         </van-button>
       </div>
     </van-popup>
@@ -86,9 +101,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { showSuccessToast, showToast } from 'vant'
-import { getMyWallet, rechargeWallet, getWalletLogs } from '@/api/wallet'
+import { getMyWallet, rechargeWallet, withdrawWallet, getWalletLogs } from '@/api/wallet'
 import { formatDateTime } from '@/utils/format'
 
 const balance = ref(0)
@@ -98,14 +113,23 @@ const pageSize = 10
 const loading = ref(false)
 const finished = ref(false)
 
-const rechargeShow = ref(false)
+const dialogShow = ref(false)
+const mode = ref('recharge') // 'recharge' | 'withdraw'
 const submitting = ref(false)
-const presets = [50, 100, 200, 500]
+const presets = ref([])
 const amountInput = ref(100)
+
+const presetsByMode = {
+  recharge: [50, 100, 200, 500],
+  withdraw: [100, 200, 500, 1000]
+}
+
+const dialogTitle = computed(() => (mode.value === 'withdraw' ? '模拟提现' : '模拟充值'))
+const dialogSubmitText = computed(() => (mode.value === 'withdraw' ? '确认提现' : '确认充值'))
 
 // 流水类型 → Vant Tag 颜色
 function typeColor(type) {
-  return { 充值: 'primary', 冻结: 'warning', 解冻: 'success', 工资: 'success', 服务费: 'danger' }[type] || 'default'
+  return { 充值: 'primary', 冻结: 'warning', 解冻: 'success', 工资: 'success', 服务费: 'danger', 提现: 'danger' }[type] || 'default'
 }
 
 async function loadBalance() {
@@ -117,22 +141,25 @@ async function loadBalance() {
   }
 }
 
-function openRecharge() {
-  amountInput.value = 100
-  rechargeShow.value = true
+function openDialog(m) {
+  mode.value = m
+  presets.value = presetsByMode[m]
+  amountInput.value = m === 'withdraw' ? Math.min(100, balance.value) : 100
+  dialogShow.value = true
 }
 
-async function submitRecharge() {
+async function submitDialog() {
   const amount = Number(amountInput.value)
   if (!amount || amount <= 0) {
     return showToast('请输入有效金额')
   }
   submitting.value = true
   try {
-    const res = await rechargeWallet(amount)
+    const api = mode.value === 'withdraw' ? withdrawWallet : rechargeWallet
+    const res = await api(amount)
     balance.value = res.data?.balance ?? balance.value
-    showSuccessToast('充值成功')
-    rechargeShow.value = false
+    showSuccessToast(mode.value === 'withdraw' ? '提现成功' : '充值成功')
+    dialogShow.value = false
     // 流水回到第一页重新拉
     logs.value = []
     page.value = 1
@@ -140,7 +167,7 @@ async function submitRecharge() {
     loading.value = false
     onLoad()
   } catch (e) {
-    // 失败提示已由 request.js Toast（金额非正数/超上限）
+    // 失败提示已由 request.js Toast（余额不足/超上限/金额非正数等）
   } finally {
     submitting.value = false
   }
@@ -199,10 +226,14 @@ loadBalance()
   font-size: 12px;
   opacity: 0.75;
 }
-.balance-card__recharge {
+.balance-card__actions {
   position: absolute;
   right: 16px;
   top: 18px;
+  display: flex;
+  gap: 8px;
+}
+.balance-card__btn {
   border-color: rgba(255, 255, 255, 0.6);
 }
 .logs-head {
@@ -274,6 +305,11 @@ loadBalance()
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 14px;
+}
+.recharge-form__max {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--brand-primary);
 }
 .recharge-form__presets {
   display: flex;

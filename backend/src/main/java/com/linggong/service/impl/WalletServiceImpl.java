@@ -32,6 +32,9 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
     /** 单次充值上限（元），防手滑大额 */
     private static final BigDecimal MAX_RECHARGE = new BigDecimal("1000000");
 
+    /** 单次提现上限（元），与充值对称 */
+    private static final BigDecimal MAX_WITHDRAW = new BigDecimal("1000000");
+
     private final WalletLogMapper walletLogMapper;
 
     public WalletServiceImpl(WalletLogMapper walletLogMapper) {
@@ -62,6 +65,36 @@ public class WalletServiceImpl extends ServiceImpl<WalletMapper, Wallet> impleme
                 .update();
         BigDecimal after = getById(wallet.getId()).getBalance();
         recordLog(userId, WalletLogType.RECHARGE, value, after, null, "模拟充值入账");
+        Wallet view = new Wallet();
+        view.setId(wallet.getId());
+        view.setUserId(userId);
+        view.setBalance(after);
+        return Result.ok(view);
+    }
+
+    @Override
+    @Transactional
+    public Result withdraw(Integer amount) {
+        if (amount == null || amount <= 0) {
+            return Result.fail("提现金额需大于 0");
+        }
+        BigDecimal value = BigDecimal.valueOf(amount);
+        if (value.compareTo(MAX_WITHDRAW) > 0) {
+            return Result.fail("单次提现不能超过 " + MAX_WITHDRAW.stripTrailingZeros().toPlainString() + " 元");
+        }
+        Long userId = UserHolder.getUser().getId();
+        Wallet wallet = ensureWallet(userId);
+        if (wallet.getBalance().compareTo(value) < 0) {
+            return Result.fail("可用余额不足，无法提现 ¥" + money(value)
+                    + "（当前可用 ¥" + money(wallet.getBalance()) + "）");
+        }
+        // 余额用 SQL 原子自减，避免「读-改-写」并发丢更新
+        lambdaUpdate()
+                .setSql("balance = balance - " + value.toPlainString())
+                .eq(Wallet::getId, wallet.getId())
+                .update();
+        BigDecimal after = getById(wallet.getId()).getBalance();
+        recordLog(userId, WalletLogType.WITHDRAW, value.negate(), after, null, "模拟提现到账");
         Wallet view = new Wallet();
         view.setId(wallet.getId());
         view.setUserId(userId);

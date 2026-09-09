@@ -26,6 +26,12 @@ public interface IWalletService extends IService<Wallet> {
     Result recharge(Integer amount);
 
     /**
+     * 模拟提现：金额为正整数（元），可用余额减少并记「提现」流水；
+     * 余额不足 / 超单次上限返回失败。
+     */
+    Result withdraw(Integer amount);
+
+    /**
      * 我的钱包流水（分页，按时间倒序）。
      */
     Result logs(Integer page, Integer pageSize);
