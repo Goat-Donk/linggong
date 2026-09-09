@@ -32,4 +32,7 @@ public class UserInfo {
 
     /** 信用分（默认 100） */
     private Integer credit;
+
+    /** 放鸽子次数：已录用后工人单方放弃（quit）的累计，全局供雇主审核参考 */
+    private Integer breakCount;
 }

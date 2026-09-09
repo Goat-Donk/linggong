@@ -42,6 +42,12 @@ public class EmployerApplicationDTO {
     /** 该报名人是否已被当前雇主拉黑（用于审核列表标记 / 隐藏拉黑入口） */
     private Boolean blacklisted;
 
+    /** 报名人（打工人）信用分（无资料行按默认 100，撮合透明度，仅雇主审核可见） */
+    private Integer workerCredit;
+
+    /** 报名人累计放鸽子次数（已录用后工人单方放弃，全局；>0 时应重点审慎） */
+    private Integer breakCount;
+
     /** 报名时间 */
     private LocalDateTime createTime;
 }

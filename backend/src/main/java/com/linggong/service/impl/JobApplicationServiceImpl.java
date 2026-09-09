@@ -16,6 +16,7 @@ import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
 import com.linggong.entity.Notification;
 import com.linggong.entity.User;
+import com.linggong.entity.UserInfo;
 import com.linggong.mapper.AttendanceMapper;
 import com.linggong.mapper.EmployerBlacklistMapper;
 import com.linggong.mapper.JobApplicationMapper;
@@ -211,6 +212,8 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
         Map<Long, User> userMap = workerIds.isEmpty() ? Collections.emptyMap()
                 : userMapper.selectBatchIds(workerIds).stream()
                         .collect(Collectors.toMap(User::getId, user -> user));
+        // 3.0 批量查这批报名人的资料行（信用分 + 放鸽子次数），无资料行按默认 100 信用/0 次放鸽子处理
+        Map<Long, UserInfo> userInfoMap = userInfoService.batchByUserIds(workerIds);
         // 3.1 查这批报名人里哪些已被我（雇主）拉黑，用于展示「已拉黑」标记 / 隐藏拉黑入口
         Set<Long> blacklistedWorkerIds = workerIds.isEmpty() ? Collections.emptySet()
                 : employerBlacklistMapper.selectList(new LambdaQueryWrapper<EmployerBlacklist>()
@@ -218,7 +221,7 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
                         .in(EmployerBlacklist::getWorkerId, workerIds))
                         .stream().map(EmployerBlacklist::getWorkerId).collect(Collectors.toSet());
 
-        // 4. 组装 DTO：报名 + 岗位名 + 报名人昵称头像 + 是否已拉黑
+        // 4. 组装 DTO：报名 + 岗位名 + 报名人昵称头像 + 是否已拉黑 + 信用分/放鸽子次数
         List<EmployerApplicationDTO> dtos = pageResult.getRecords().stream().map(app -> {
             EmployerApplicationDTO dto = new EmployerApplicationDTO();
             dto.setId(app.getId());
@@ -227,6 +230,10 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
             dto.setStatus(app.getStatus());
             dto.setCreateTime(app.getCreateTime());
             dto.setBlacklisted(blacklistedWorkerIds.contains(app.getWorkerId()));
+            // 信用分与放鸽子次数：无资料行（从未互评/违约的新人）按默认 100 分、0 次放鸽子展示
+            UserInfo info = userInfoMap.get(app.getWorkerId());
+            dto.setWorkerCredit(info != null && info.getCredit() != null ? info.getCredit() : CreditRules.DEFAULT);
+            dto.setBreakCount(info != null && info.getBreakCount() != null ? info.getBreakCount() : 0);
             Job job = jobMap.get(app.getJobId());
             if (job != null) {
                 dto.setJobName(job.getName());
@@ -393,6 +400,11 @@ public class JobApplicationServiceImpl extends ServiceImpl<JobApplicationMapper,
             String breakRemark = workerQuit ? "放弃已录用岗位「" + job.getName() + "」" : "单方取消录用岗位「" + job.getName() + "」";
             userInfoService.adjustCredit(breaker, CreditRules.BREAK_PENALTY,
                     CreditLog.TYPE_BREAK_HIRE, job.getId(), breakRemark);
+            // 放鸽子标记：仅「工人放弃」计入该工人的累计放鸽子次数（雇主取消录用是雇主责任，不计）。
+            // 走独立计数而非数信用流水——信用已到 0 被 clamp 时 adjustCredit 不记流水，会漏计。
+            if (workerQuit) {
+                userInfoService.incrementBreakCount(application.getWorkerId());
+            }
             if (workerQuit) {
                 notificationService.notify(job.getEmployerId(), Notification.TYPE_APPLY_QUIT, "工人放弃录用",
                         "打工人已放弃岗位「" + job.getName() + "」，名额已释放，可继续招人", job.getId());

@@ -2,6 +2,8 @@
   <div class="employer-applications">
     <van-nav-bar title="审核报名" left-arrow @click-left="$router.back()" />
 
+    <p class="review-hint">每条报名展示该工人的信用分与放鸽子次数（曾放弃已录用岗位），供你判断是否录用</p>
+
     <van-list
       v-model:loading="loading"
       :finished="finished"
@@ -24,6 +26,10 @@
               <span class="app-card__hint">查看主页 ›</span>
             </span>
             <span class="app-card__job">{{ app.jobName }}</span>
+            <div v-if="app.workerCredit != null" class="app-card__risk">
+              <van-tag :type="creditTag(app.workerCredit)" size="small" plain>信用 {{ app.workerCredit }}</van-tag>
+              <van-tag v-if="app.breakCount > 0" type="danger" size="small" plain>放鸽子 ×{{ app.breakCount }}</van-tag>
+            </div>
           </div>
           <van-tag :type="applyStatusType(app.status)">{{ formatApplyStatus(app.status) }}</van-tag>
         </div>
@@ -121,6 +127,13 @@ function goWorker(workerId) {
   }
 }
 
+// 信用分档 → tag 色（60 与服务端 CreditRules.LOW_CREDIT 一致：低于 60 为低信用标红）
+function creditTag(credit) {
+  if (credit < 60) return 'danger'
+  if (credit >= 80) return 'success'
+  return 'warning'
+}
+
 // 联系该报名工人：进入围绕该岗位的聊天会话
 function goChat(app) {
   router.push(`/chat/${app.workerId}?jobId=${app.jobId}`)
@@ -196,6 +209,11 @@ async function onReasonSelect(action) {
   min-height: 100vh;
   padding-bottom: 24px;
 }
+.review-hint {
+  margin: 10px 14px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
 .app-card {
   margin: 12px 12px 0;
   padding: 14px 16px;
@@ -233,6 +251,12 @@ async function onReasonSelect(action) {
   font-size: 12px;
   color: var(--text-tertiary);
   margin-top: 2px;
+}
+.app-card__risk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
 }
 .app-card__foot {
   display: flex;

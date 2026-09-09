@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `tb_user_info` (
     `age`       int          DEFAULT NULL COMMENT '年龄',
     `gender`    tinyint      DEFAULT NULL COMMENT '性别：0未知 1男 2女',
     `credit`    int          NOT NULL DEFAULT 100 COMMENT '信用分',
+    `break_count` int        NOT NULL DEFAULT 0 COMMENT '放鸽子次数（已录用后工人单方放弃，供雇主审核参考）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户资料表';

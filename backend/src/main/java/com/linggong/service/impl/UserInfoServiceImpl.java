@@ -14,6 +14,13 @@ import com.linggong.utils.UserHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 /**
  * 用户资料服务实现。
  */
@@ -97,5 +104,19 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
                         .eq(CreditLog::getUserId, userId)
                         .orderByDesc(CreditLog::getCreateTime, CreditLog::getId));
         return Result.ok(result.getRecords(), result.getTotal());
+    }
+
+    @Override
+    public void incrementBreakCount(Long userId) {
+        baseMapper.incrementBreakCount(userId);
+    }
+
+    @Override
+    public Map<Long, UserInfo> batchByUserIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<UserInfo> list = lambdaQuery().in(UserInfo::getUserId, userIds).list();
+        return list.stream().collect(Collectors.toMap(UserInfo::getUserId, Function.identity()));
     }
 }
