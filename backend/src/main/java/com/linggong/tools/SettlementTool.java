@@ -4,14 +4,18 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.linggong.dto.Result;
+import com.linggong.dto.UserDTO;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobSettlement;
 import com.linggong.entity.JobSettlementItem;
 import com.linggong.mapper.JobMapper;
 import com.linggong.mapper.JobSettlementItemMapper;
 import com.linggong.mapper.JobSettlementMapper;
+import com.linggong.utils.AiContextHelper;
+import com.linggong.utils.AiToolDate;
 import com.linggong.utils.UserHolder;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -45,12 +49,14 @@ public class SettlementTool {
     }
 
     @Tool("查询当前登录打工人（role=0）的历史结算工资记录（已到账明细，最多 20 条）")
-    public String queryMySettlements() {
-        Long userId = UserHolder.getUser() != null ? UserHolder.getUser().getId() : null;
-        log.info("[SettlementTool] 查询我的结算工资, userId={}", userId);
-        if (userId == null) {
-            return JSONUtil.toJsonStr(Result.fail("用户未登录，无法查询结算记录"));
+    public String queryMySettlements(@ToolMemoryId String memoryId) {
+        UserDTO user = AiContextHelper.userFromMemoryId(memoryId);
+        log.info("[SettlementTool] 查询我的结算工资, memoryId={}", memoryId);
+        if (user == null) {
+            return JSONUtil.toJsonStr(Result.fail("无法识别当前登录用户，请重新登录"));
         }
+        Long userId = user.getId();
+        UserHolder.saveUser(user);
         try {
             List<JobSettlementItem> items = settlementItemMapper.selectList(
                     new LambdaQueryWrapper<JobSettlementItem>()
@@ -74,13 +80,15 @@ public class SettlementTool {
                 row.put("jobName", jobName(jobMap, settlement));
                 row.put("wageAmount", item.getWageAmount());
                 row.put("paidHalfDays", item.getPaidHalfDays());
-                row.put("settledAt", settlement == null ? null : settlement.getSettledAt());
+                row.put("settledAt", AiToolDate.datetime(settlement == null ? null : settlement.getSettledAt()));
                 list.add(row);
             }
             return JSONUtil.toJsonStr(Result.ok(list, (long) list.size()));
         } catch (Exception e) {
             log.warn("[SettlementTool] 查询结算工资失败, userId={}", userId, e);
             return JSONUtil.toJsonStr(Result.fail("结算记录查询失败"));
+        } finally {
+            UserHolder.remove();
         }
     }
 

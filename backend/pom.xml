@@ -169,6 +169,10 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- 强制后端 JVM 使用 UTF-8 默认字符集：
+                         langchain4j 的 JdkHttpClient 读 LLM 流式响应用无参 InputStreamReader（走默认字符集），
+                         中文 Windows 上 JDK17 默认是 GBK，会把 DeepSeek 返回的中文解码成乱码。 -->
+                    <jvmArguments>-Dfile.encoding=UTF-8</jvmArguments>
                 </configuration>
             </plugin>
         </plugins>
