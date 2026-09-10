@@ -101,7 +101,20 @@
         <van-cell title="说明" label="发岗时从余额冻结 日薪×名额×天数 作为担保；结算时给打工人发工资、剩余退回，另按结算额抽 10% 服务费（雇主承担）" />
       </van-cell-group>
 
-      <van-cell-group inset title="岗位描述（可选）">
+      <van-cell-group inset>
+        <template #title>
+          <div class="desc-title">
+            <span>岗位描述（可选）</span>
+            <van-button
+              size="mini"
+              type="primary"
+              plain
+              icon="edit"
+              :loading="optimizing"
+              @click="onAiOptimize"
+            >AI 优化描述</van-button>
+          </div>
+        </template>
         <van-field
           v-model="form.description"
           name="description"
@@ -140,6 +153,18 @@
         @cancel="showTimePicker = false"
       />
     </van-popup>
+
+    <!-- AI 优化结果预览：应用才写入表单，取消则丢弃 -->
+    <van-dialog
+      v-model:show="showPreview"
+      title="AI 优化结果"
+      show-cancel-button
+      confirm-button-text="应用"
+      cancel-button-text="取消"
+      @confirm="applyAiDescription"
+    >
+      <div class="ai-preview">{{ previewText }}</div>
+    </van-dialog>
   </div>
 </template>
 
@@ -149,6 +174,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getCategories } from '@/api/category'
 import { publishJob, getJobById, updateJob } from '@/api/job'
+import { optimizeDescription } from '@/api/ai'
 import { regeo } from '@/api/map'
 import { getMyWallet } from '@/api/wallet'
 import { userState } from '@/stores/user'
@@ -179,6 +205,9 @@ const salaryText = ref('')
 const startTimeText = ref('')
 const endTimeText = ref('')
 const submitting = ref(false)
+const optimizing = ref(false) // AI 优化中
+const showPreview = ref(false) // AI 结果预览弹窗
+const previewText = ref('')
 
 // 担保冻结预览：余额 + 任务天数 + 需冻结金额（后端同口径：日薪×名额×自然日天数）
 const balance = ref(0)
@@ -339,6 +368,47 @@ function formatPickerDate(arr) {
   return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:00`
 }
 
+// AI 优化岗位描述：把表单字段带上（草稿为空则 AI 从字段生成，非空则润色），结果先预览再决定是否应用
+async function onAiOptimize() {
+  if (!form.name.trim()) {
+    showToast('请先填写岗位名称')
+    return
+  }
+  const salaryNum = Number(salaryText.value)
+  if (!Number.isInteger(salaryNum) || salaryNum <= 0) {
+    showToast('请先填写日薪（元/天）')
+    return
+  }
+  const payload = {
+    name: form.name.trim(),
+    categoryName: categoryText.value || '',
+    salary: salaryNum,
+    headcount: form.headcount,
+    startTime: startTimeText.value || '',
+    endTime: endTimeText.value || '',
+    address: form.address.trim() || locatedAddress.value || '',
+    description: form.description.trim()
+  }
+  optimizing.value = true
+  showLoadingToast({ message: 'AI 优化中，请稍候...', forbidClick: true })
+  try {
+    const res = await optimizeDescription(payload)
+    closeToast()
+    previewText.value = (res.data || '').slice(0, 1024)
+    showPreview.value = true
+  } catch (e) {
+    // 失败已由 request.js Toast（未配置 Key / LLM 异常 / 限流 / 非雇主等）
+  } finally {
+    closeToast()
+    optimizing.value = false
+  }
+}
+
+function applyAiDescription() {
+  form.description = previewText.value
+  showPreview.value = false
+}
+
 async function onSubmit() {
   if (form.x == null || form.y == null) {
     showToast('请先获取工作定位')
@@ -397,5 +467,21 @@ async function onSubmit() {
 }
 .fee-lack :deep(.van-cell__title) {
   color: var(--danger);
+}
+.desc-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+.ai-preview {
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-color, #323233);
 }
 </style>
