@@ -38,6 +38,12 @@
         </template>
       </van-cell>
       <van-cell
+        title="AI 助手"
+        icon="bulb-o"
+        is-link
+        @click="$router.push('/ai-assistant')"
+      />
+      <van-cell
         title="动态"
         icon="fire-o"
         is-link

@@ -95,6 +95,12 @@ const routes = [
     meta: { title: '聊天', requiresAuth: true }
   },
   {
+    path: '/ai-assistant',
+    name: 'aiAssistant',
+    component: () => import('@/views/AiAssistant.vue'),
+    meta: { title: 'AI 助手', requiresAuth: true }
+  },
+  {
     path: '/my-applications',
     name: 'myApplications',
     component: () => import('@/views/MyApplications.vue'),

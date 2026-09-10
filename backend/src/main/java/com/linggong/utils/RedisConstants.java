@@ -56,6 +56,11 @@ public final class RedisConstants {
     /** 接口限流 key 前缀，完整 key = rate:limit:{全类名.方法名}[:userId|:ip]（ZSet，member 存请求时间戳） */
     public static final String RATE_LIMIT_KEY = "rate:limit:";
 
+    /** AI 问答助手会话记忆 key 前缀，完整 key = ai:qa:memory:{userId}（value 存消息 JSON 序列化） */
+    public static final String AI_QA_MEMORY_KEY = "ai:qa:memory:";
+    /** AI 会话记忆有效期（天） */
+    public static final Long AI_QA_MEMORY_TTL = 1L;
+
     private RedisConstants() {
     }
 }
