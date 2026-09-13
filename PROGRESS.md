@@ -396,18 +396,31 @@ d:\linggong\
   - **用户已确认的 C1 实验纪律（照此执行）**：① 必须与 B2（纯 BM25）做严格 A/B；② **提前做好「混合召回跑输纯 BM25」的心理准备** —— 真跑输说明向量模型或 RRF 权重有问题，不许调数字掩盖；③ 重点观察向量介入后 **colloquial 与 cross** 两类的 Hit@3 是否有显著提升（这两类是 A-3 已定位的痛点：cross 的 Recall@3 仅 0.2333，说明 top-3 对多规则问题偏小）。
   - **阻塞**：DashScope 账号欠费，C0 的真正结论要等充值后重跑 `tools/check_embeddings.py` 才能得出。**充值只能由用户本人操作**（需支付方式与账号凭据）。
 
+- **【RAG 决策记录】放弃 RAG，改为规则全量注入**（用户 2026-09-13 拍板）—— 这条推翻的是本文档此前的 C 阶段计划（C1 向量化 / C2 RRF / C3 Rerank / C4 降级），**保留此节作为决策依据，避免后人重走一遍**。
+  - **决策**：把 19 条平台规则**全量拼进系统提示词**，删掉整条 RAG 链路。用户原话的判断是「规则直接塞进提示词算了」，依据是语料规模。
+  - **量化依据（三条，都是本项目自己实测出来的）**：
+    1. **语料比上下文窗口小三个数量级**。19 条规则 ≈ 2063 字（正文 1656 + 标题 144 + tags 263）≈ **1.2~1.5K token**，而模型上下文窗口是 1M —— 知识库只占 **0.13%**。全量注入的召回率恒为 1，RAG 那一整层失败模式直接消失。
+    2. **A-3 实测显示检索在该规模下是负收益**：拒答准确率仅 **34.7%**，其中 `near_miss` 超纲题 **0.0%（40/40 全军覆没）**——`retrieve()` 无分数阈值，只要有一个 2-gram 重叠就把不相关规则塞进上下文，**主动帮倒忙**（诱导模型硬答超纲问题）。
+    3. **检索会漏召，全量注入不会**。中文口语 query 与规则词表大量不重合（实测 colloquial 类平均 OOV **87.1%**，其中 **28/75 条 token 全 OOV**，而「全 OOV ⟺ 零召回」是 A-3 用 425 条样本逐条验证过的恒等式）。最典型的是用户说「押金」而规则库只写「担保金」，BM25 直接返回空。
+  - **明确不成立的反对理由**：全量注入**不会**因 prompt 变长而显著变贵 —— 规则前缀每次完全相同，命中服务端上下文缓存（缓存命中价约 0.15/1M → 0.003/1M，差 50 倍）；且规则是静态的（改规则需重启），本就不存在「知识频繁更新、要秒级生效」这个 RAG 的典型场景。
+  - **保留了什么**：`tb_ai_trace` 与 `com.linggong.ai.trace` 全部保留 —— 它们是**可观测性**，与用不用 RAG 无关（记录 query / 各段耗时 / 最终回答 / 结束状态 / 注入的规则）。`tb_ai_rule` 保留（现在是提示词的数据源）。`tools/fake_llm_sse.py` 保留（离线测 SSE 外层链路，与 RAG 无关）。
+  - **删除了什么**（用户选择「全删」，含评测资产）：生产侧 `RuleContentRetriever` / `Bm25ContentRetriever` / `TracingRuleRetriever`；测试侧 `ai/eval/` 整套指标引擎（14 类）+ `ai/eval-set.json`（500 条）+ `aliases.json` / `rules.json`；工具侧 `gen_eval_set.py` / `check_semantic_gap.py` / `snapshot_rules.py` / `propose_aliases.py` / `gen_aliases.py` / `check_embeddings.py`；`ai/synonym-whitelist.json`；`docs/rag-eval-baseline.md`。**全部已在 git 历史里**（A 阶段 `7ebecc0` 等），需要时可 `git checkout` 取回。
+  - **替代实现**：新增 `PlatformRuleBook`（`@PostConstruct` 全量载入 `tb_ai_rule`，拼成 `【标题】+正文` 的文本）+ 系统提示词新增 `{{rules}}` 占位符，靠 `@V("rules")` 注入。**`@V` 能渲染进 `@SystemMessage(fromResource=...)` 是先验证过才动手的**：`javap` 看 `DefaultAiServices.lambda$prepareSystemMessage$0` 里是 `PromptTemplate.from(template).apply(variables).toSystemMessage()`，确认支持。
+  - **连带清理（避免留 RAG 残留）**：`TraceSession` 的 `retrievedRuleIds` → `injectedRuleIds`（语义从「检索命中」变成「注入的依据」）；删掉 ThreadLocal（它唯一的消费者是已被删除的检索器装饰器，现在会话在 `traced()` 内直接持有）；`latencySegments()` 删掉 `queryRewriteMs` / `bm25Ms` / `rerankMs` / `retrievalFailed`，只留 `firstTokenMs` / `totalMs`；`AiChatTracer.traced()` 增加 `injectedRuleIds` 参数；DDL 同步 `ALTER TABLE tb_ai_trace CHANGE retrieved_rule_ids injected_rule_ids`（存量数据保留，库里恰好留下改造前后的对照：老行 `[30,31,29]` + `bm25Ms`，新行 `[20..38]`）。
+  - **验证（真实链路，非仅单测）**：`mvn -o test -Dfile.encoding=UTF-8` → **19 用例全绿**（原 65 个里的 46 个随评测引擎一起删除）；启动后端实测「服务费谁出」，回答精确复刻规则 30 的专有口径（「余额不足结算会失败、需要先充值」是平台特有逻辑，不是通用知识），落库 `injected_rule_ids=[20,21,...,38]` 全 19 条、`latency_breakdown={"firstTokenMs":1164,"totalMs":2491}`、`status=OK`。
+  - **后续不排除重启 RAG 的条件（写清楚，避免变成"永远不做"）**：语料规模上到**几十万字**（远超提示词可接受范围），或**要求秒级热更新**（现在改规则要重启后端），或**需要跨文档的语义检索**时，再引入检索。届时的起点是 git 历史里的 A-3，不是从零。
+
 ### 🔄 进行中
-- 简历工程（见下一步）。
+- **AI 能力转向 Agent 方向**（用户 2026-09-13 定：RAG 不做之后「做点别的 AI 功能」）。
 
 ### ⏭ 下一步
-- **RAG 评测（用户 2026-09-13 定优先级：A 度量先行 + B trace 绑定做）** —— 理由（用户原话转述）：没有 Hit@k / MRR / NDCG 就无法证明 RAG 优化有效，且这是纯本地、不花 token 的活，产出的是简历上含金量极高的量化数据；而只做评测不记录 `retrieved_ids`/耗时/工具调用序列，Bad Case 只能盲猜是哪一环出问题，trace 是评测的灵魂、也是面试「系统怎么排查问题」的真实工程故事。
-  - **A-1 已完成**：500 条标注集（见上）。规模口径从此前的「50~80 条」正式升为 500 条，本文档旧描述同步作废。
-  - **A-2 已完成**：指标引擎（见上，32 用例全绿）。
-  - **A-3 已完成**：基线阶梯与 k 敏感度（见上）。执行序列按用户拍板为 **B0 朴素 contains → B1 TF-IDF → B2 现状 BM25 → B3 BM25+tags 加权 → B4 = B3 + 别名扩展**（用户把 B1 从此前设想的「纯 TF」改成 **TF-IDF**：这样 B1→B2 恰好隔离出 k1 饱和与 b 归一化，故事更干净）。⚠️ **B4 已按用户要求留在 A-3 之内而非推到 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B3→B4 的差值就是别名扩展的真实收益。**技术点已按预定方案解决**（生产代码零改动）：B2 直接 new 真实 `Bm25ContentRetriever` 并用 Mockito 打桩 `selectList()` 喂语料；B0/B1 复用同一分词器（测试源集的 `com.linggong.ai.rule.impl.TokenizerBridge` 一行桥接包级 `tokenize()`）以保证差异只来自打分方式。**曾明确否决「在测试里重写一份 BM25」**——那会让基线描述测试的实现而非生产的实现。
-  - **A 阶段整体完成**。
-  - **B 已完成**：运行时 trace 表（见上），三种结束状态真机跑通。**A 阶段与 B 阶段整体完成**，下一步进入 **C（C0 收尾 → C1 向量化冒烟 → C2 RRF 融合 → C4 降级）**。
-  - **B. trace**：每次问答记录 retrieved ruleIds + 工具调用序列 + 各段耗时。**schema 用户 2026-09-13 已拍板**（此前本文档「落表或日志」的开放表述作废）：`trace_id / query / retrieved_ruleIds(JSON 数组) / latency_breakdown(JSON 对象：查询改写 / BM25 / Rerank 各段耗时) / final_answer / timestamp`。**明确否决单一巨型 JSON 日志**。双重价值：① Bad Case 归因 ② 未来前端「这条回答的依据是什么」面板的数据源。**纪律：A-1~A-3 必须先跑完拿到基线数据再动 B**，不提前引入复杂依赖导致评测主线跑偏。
-- 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行；聊天演示数据已随 c549602 入库）。
+- **Step E：Agent 工具扩容**（用户从四个候选里选定，见下）—— 把 12+ 个未工具化的「我的 X」只读接口包成 `@Tool`：
+  `/wallet/summary`、`/wallet/logs`、`/credit/my`、`/credit/logs`、`/notification/list`、`/notification/unread-count`、`/job/my`、`/job/my-summary`、`/job-application/employer`、`/attendance/jobs`、`/attendance/job`、`/job-favorite/my`。
+  - **为什么选它**：现有 `@Tool` + `@ToolMemoryId` 模式已在 5 个工具（Wallet/Application/Settlement/Job/Attendance）上验证，**零风险扩容**；真实痛点明确（助手现在答不了「我这个月赚了多少」「我的信用分多少」）；纯增量，不碰现有代码。
+  - **统一模式**：`AiContextHelper.userFromMemoryId(memoryId)` → 判空 → `UserHolder.saveUser` → 只读查询 → `finally` 清理。
+  - **顺带记录一个脆弱点**：`memoryId` 格式（`ai:qa:memory:{userId}`）是跨层隐式协议，改格式会**静默**让所有工具失效（工具拿不到 userId 就返回 errorMsg，不报错）。扩容时值得加一条测试钉住。
+- **被否决的候选（记录理由，避免反复讨论）**：① **AI 岗位推荐**（向量推荐，本可复用已冒烟通过的 DashScope embedding）—— 有价值但**数据不成立**：`seed_data.py` 只有 60 条报名 / 50 用户，人均 1.2 条，留出法无法构造 ground truth，要做得先把报名数据扩到人均 10+ 条；② **智能搜索改写**（LLM 把「明天下午的活」转结构化筛选）—— 载体真实但需另造一套标注集，工作量大于 E；③ **求职登记智能解析** —— 载体真实但评测口径弱。**这三项随时可捡起，不是永久否决。**
+- 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写。**AI 能力句需按本次改动重写** —— 不再提「BM25 检索增强 RAG」，改为「规则全量注入 + Agent 函数调用（钱包/报名/考勤/结算/岗位/信用/通知实时查询）+ SSE 流式对话 + Redis 会话记忆 + 问答 trace 可观测 + 注解限流 + 降级兜底」。**A 阶段的量化评测可继续作为「做过 RAG 评测并据数据否决」的证据讲**（数据在 git 历史与本文档 A-1~A-3 三节里完整保留）。演示数据收尾清理（job246 残留考勤行；聊天演示数据已随 c549602 入库）。
 
 ---
 

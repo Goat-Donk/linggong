@@ -11,33 +11,24 @@ import java.util.UUID;
 /**
  * 一次 AI 问答的追踪会话：一条 trace 记录的「草稿」，在问答过程中逐步填满。
  *
- * <h3>为什么既要 ThreadLocal 又要闭包</h3>
- * langchain4j 的链路横跨两条线程，这两件事必须用不同手段解决，混为一谈就会丢数据：
+ * <h3>跨两条线程 —— 本类所有设计的由来</h3>
  * <ul>
- *   <li><b>检索</b>发生在调用方线程上。这一点是从字节码里核实过的：{@code DefaultAiServices}
- *       的代理方法体里<b>同步</b>调用 {@code retrievalAugmentor.augment(...)}，
- *       再把结果塞进 {@code AiServiceTokenStreamParameters}，也就是说
- *       {@code aiAssistant.chat(...)} 一返回，检索就已经做完了。所以检索器与调用方同线程，
- *       用 {@link ThreadLocal} 就能拿到当前会话。</li>
- *   <li><b>回答分片</b>是在模型回调线程（okhttp 派发线程）上到达的，那条线程上没有本 ThreadLocal。
- *       所以调用方必须把 session 对象<b>捕获进 Flux 的闭包</b>（{@code doOnNext(session::appendAnswer)}），
- *       而不是指望回调里能 {@code current()} 到它。</li>
+ *   <li><b>发起调用</b>在请求线程上（注入规则手册、调 {@code aiAssistant.chat(...)}）；</li>
+ *   <li><b>回答分片</b>在模型回调线程（okhttp 派发线程）上到达，那条线程上根本没有本对象。
+ *       所以调用方必须把 session <b>捕获进 Flux 的闭包</b>（{@code doOnNext(session::appendAnswer)}），
+ *       而不能指望回调里能拿到它。</li>
  * </ul>
- * 反过来说：如果哪天有人把检索改成异步（比如并行调用两路召回），{@code current()} 就会返回 null，
- * 检索数据会静默丢失。为此 {@link TracingRuleRetriever} 在拿不到会话时会打一条 WARN —— 让这件事
- * 暴露出来，而不是安静地少记一列。
+ * 也正因为分片是异步到达的，{@link #appendAnswer} / {@link #markError} / {@link #markIncomplete}
+ * 全部 {@code synchronized} —— 模型回调与流终结回调可能并发碰到同一个 session。
  *
- * <h3>为什么结束分两步</h3>
- * {@link #end()} 只清 ThreadLocal（检索做完就该清，避免线程复用串数据），
- * {@link #finish()} 才产出待落库的实体（要等回答流结束）。
- * 之所以不在这里落库：这个类不该依赖 Mapper，落库与容错都归 {@code AiTraceRecorder}。
+ * <h3>为什么开始与落库不在一起</h3>
+ * 会话在问答开始前创建，落库要等回答流结束（{@code doFinally}）。之所以不在这里落库：
+ * 这个类不该依赖 Mapper，落库与容错都归 {@link AiTraceRecorder}。
  */
 public final class TraceSession {
 
     /** final_answer 列是 varchar(2048)，留点余量 */
     static final int MAX_ANSWER_CHARS = 2000;
-
-    private static final ThreadLocal<TraceSession> CURRENT = new ThreadLocal<>();
 
     private final String traceId = UUID.randomUUID().toString().replace("-", "");
     private final Long userId;
@@ -46,10 +37,8 @@ public final class TraceSession {
     private final long startNanos = System.nanoTime();
 
     private final StringBuilder answer = new StringBuilder();
-    private final List<Long> retrievedRuleIds = new ArrayList<>();
+    private final List<Long> injectedRuleIds = new ArrayList<>();
 
-    private Long bm25Nanos;
-    private boolean retrievalFailed;
     private Long firstTokenNanos;
     private String status = AiTrace.STATUS_OK;
     private boolean truncated;
@@ -60,45 +49,27 @@ public final class TraceSession {
         this.query = query;
     }
 
-    // ===== 生命周期 =====
+    /** 开始一次追踪。 */
+    public static TraceSession start(Long userId, Integer userRole, String query) {
+        return new TraceSession(userId, userRole, query);
+    }
+
+    // ===== 规则依据（请求线程） =====
 
     /**
-     * 开始一次追踪，并把会话挂到当前线程。
+     * 记录本次注入提示词的规则 id。
      *
-     * <p>调用方必须保证随后同步发起 {@code aiAssistant.chat(...)}，并在返回后立刻 {@link #end()}：
-     * 会话绑定的是「当前线程这一小段同步执行」，不是整个流式回答的生命周期。
+     * <p>规则库只有 19 条，走的是全量注入而非检索（见
+     * {@link com.linggong.ai.rule.PlatformRuleBook}），所以这里存的是<b>全集</b>。
+     * 它回答的问题也随之变了：从「检索命中了哪几条」变成「这次回答手里握着哪些依据」——
+     * 归因模型答错时，前者能怪检索，后者只能怪模型，这恰好是全量注入想要的结论。
      */
-    public static TraceSession begin(Long userId, Integer userRole, String query) {
-        TraceSession session = new TraceSession(userId, userRole, query);
-        CURRENT.set(session);
-        return session;
-    }
-
-    /** 当前线程正在追踪的会话；不在追踪中返回 null。 */
-    public static TraceSession current() {
-        return CURRENT.get();
-    }
-
-    /** 摘掉当前线程的会话。幂等。 */
-    public static void end() {
-        CURRENT.remove();
-    }
-
-    // ===== 检索侧（调用方线程） =====
-
-    /** 检索成功，记录命中的规则 id 与耗时。 */
-    public void recordRetrieval(List<Long> ruleIds, long elapsedNanos) {
-        this.bm25Nanos = elapsedNanos;
-        if (ruleIds != null) {
-            this.retrievedRuleIds.clear();
-            this.retrievedRuleIds.addAll(ruleIds);
+    public void recordInjectedRules(List<Long> ruleIds) {
+        if (ruleIds == null) {
+            return;
         }
-    }
-
-    /** 检索抛异常。异常本身由装饰器原样上抛，这里只留痕，让 trace 能区分「检索坏了」与「模型坏了」。 */
-    public void recordRetrievalFailure(long elapsedNanos) {
-        this.bm25Nanos = elapsedNanos;
-        this.retrievalFailed = true;
+        this.injectedRuleIds.clear();
+        this.injectedRuleIds.addAll(ruleIds);
     }
 
     // ===== 回答侧（模型回调线程） =====
@@ -166,7 +137,7 @@ public final class TraceSession {
         trace.setUserId(userId);
         trace.setUserRole(userRole);
         trace.setQuery(query);
-        trace.setRetrievedRuleIds(AiTraceJson.ruleIds(retrievedRuleIds));
+        trace.setInjectedRuleIds(AiTraceJson.ruleIds(injectedRuleIds));
         trace.setLatencyBreakdown(AiTraceJson.latency(latencySegments()));
         trace.setFinalAnswer(truncated ? answer + "……（已截断）" : answer.toString());
         trace.setStatus(status);
@@ -179,16 +150,8 @@ public final class TraceSession {
      */
     private Map<String, Object> latencySegments() {
         Map<String, Object> segments = new LinkedHashMap<>();
-        // 查询改写尚未接入（规划中的 C0 之后才有 QueryTransformer）
-        segments.put("queryRewriteMs", null);
-        segments.put("bm25Ms", millis(bm25Nanos));
-        // 重排尚未接入（规划中的 C3，且要等语料变大后才值得做）
-        segments.put("rerankMs", null);
         segments.put("firstTokenMs", millis(firstTokenNanos));
         segments.put("totalMs", millis(System.nanoTime() - startNanos));
-        if (retrievalFailed) {
-            segments.put("retrievalFailed", true);
-        }
         return segments;
     }
 

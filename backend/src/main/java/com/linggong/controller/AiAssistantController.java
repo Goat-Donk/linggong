@@ -1,6 +1,7 @@
 package com.linggong.controller;
 
 import cn.hutool.core.util.StrUtil;
+import com.linggong.ai.rule.PlatformRuleBook;
 import com.linggong.ai.trace.AiChatTracer;
 import com.linggong.annotation.RateLimiter;
 import com.linggong.dto.UserDTO;
@@ -33,15 +34,18 @@ public class AiAssistantController {
 
     private final AiAssistant aiAssistant;
     private final AiChatTracer chatTracer;
+    private final PlatformRuleBook ruleBook;
     private final String apiKey;
     private final String fallbackReply;
 
     public AiAssistantController(AiAssistant aiAssistant,
                                  AiChatTracer chatTracer,
+                                 PlatformRuleBook ruleBook,
                                  @Value("${linggong.ai.api-key:}") String apiKey,
                                  @Value("${linggong.ai.fallback-reply:AI 服务暂时不可用，请稍后再试～}") String fallbackReply) {
         this.aiAssistant = aiAssistant;
         this.chatTracer = chatTracer;
+        this.ruleBook = ruleBook;
         this.apiKey = apiKey;
         this.fallbackReply = fallbackReply;
     }
@@ -60,9 +64,9 @@ public class AiAssistantController {
         String memoryId = RedisConstants.AI_QA_MEMORY_KEY + user.getId();
         String role = user.getRole() == null ? "0" : String.valueOf(user.getRole());
         String userId = String.valueOf(user.getId());
-        // 追踪包住 chat 的调用本身（检索在其内部同步发生），回答分片与落库由追踪器接管
-        return chatTracer.traced(user.getId(), user.getRole(), message,
-                        () -> aiAssistant.chat(memoryId, message, role, userId))
+        // 追踪包住 chat 的调用本身，回答分片与落库由追踪器接管
+        return chatTracer.traced(user.getId(), user.getRole(), message, ruleBook.ruleIds(),
+                        () -> aiAssistant.chat(memoryId, message, role, userId, ruleBook.text()))
                 // 流内异常（网络/模型返回异常）兜底保流，不把错误抛给前端
                 .onErrorResume(e -> {
                     log.error("AI 问答流式调用失败, userId={}, message={}", userId, message, e);

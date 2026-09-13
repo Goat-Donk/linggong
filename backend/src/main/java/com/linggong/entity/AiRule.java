@@ -8,10 +8,10 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 平台规则知识库条目（AI 问答 RAG 的数据源）。
+ * 平台规则知识库条目（AI 问答的规则依据）。
  *
  * <p>内容全部对齐现网业务实现（结算/信用/考勤/黑名单等口径与 db.sql 和业务代码一致），
- * 启动时由 Bm25ContentRetriever 全量载入内存做关键词检索。
+ * 启动时由 {@link com.linggong.ai.rule.PlatformRuleBook} 全量载入并注入系统提示词。
  */
 @Data
 @TableName("tb_ai_rule")

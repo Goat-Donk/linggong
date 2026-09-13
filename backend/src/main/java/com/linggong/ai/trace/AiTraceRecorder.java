@@ -39,8 +39,8 @@ public class AiTraceRecorder {
         try {
             AiTrace trace = session.finish();
             aiTraceMapper.insert(trace);
-            log.debug("AI 问答 trace 已落库：id={}, status={}, 检索命中 {} 条",
-                    trace.getTraceId(), trace.getStatus(), trace.getRetrievedRuleIds());
+            log.debug("AI 问答 trace 已落库：id={}, status={}, 注入规则 {}",
+                    trace.getTraceId(), trace.getStatus(), trace.getInjectedRuleIds());
         } catch (Exception e) {
             // 表还没建、DB 抖动、字段超长都可能走到这里。埋点坏了不该让用户看见。
             log.error("AI 问答 trace 落库失败（不影响问答本身）", e);

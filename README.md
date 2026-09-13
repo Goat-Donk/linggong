@@ -16,7 +16,7 @@
 | 后端 | JDK 17、Spring Boot 3.5.x、MyBatis-Plus 3.5.x |
 | 存储 | MySQL 8.0、Redis 7（缓存三问题 / GEO 附近搜索 / 签到 bitmap / 分布式 ID / Redisson 锁） |
 | 消息 | RabbitMQ 3.x（替代黑马点评的 Redis Stream，做异步落单 + 死信） |
-| AI | langchain4j 1.0.1 + DashScope 兼容模式（deepseek-v3）、BM25 检索增强 RAG、SSE 流式对话 |
+| AI | langchain4j 1.0.1 + DashScope 兼容模式（deepseek-v3）、平台规则全量注入、Agent 函数调用、SSE 流式对话、问答 trace |
 | 前端 | Vue 3 + Vite + Vant 4（移动端 H5） |
 | 其它 | Lombok、Hutool、Validation、Knife4j |
 
@@ -46,19 +46,36 @@ linggong/
 │   └── src/main/java/com/linggong/
 │       ├── controller/  service/(impl)  mapper/  entity/  dto/
 │       ├── config/  interceptor/  utils/
-│       ├── ai/       # AI 问答（rule 检索 / trace 追踪）
+│       ├── ai/       # AI 问答（rule 规则手册 / trace 追踪）
 │       └── tools/    # Agent 函数调用工具
 ├── frontend/         # Vue 3 移动端 H5
 ├── deploy/           # 生产 nginx 配置（见 deploy/README.md）
-├── docs/             # 评测报告、产品与技术文档
+├── docs/             # 产品与技术文档
 └── tools/            # 测试与数据工具（见下）
 ```
 
 ---
 
+## AI 问答为什么不用 RAG
+
+规则库只有 19 条、约 1.9K 字（≈1.3K token），远低于模型上下文窗口，**全量注入比检索更准**：
+
+- 检索会**漏召**。中文口语 query 与规则词表大量不重合（如用户说「押金」，规则库里只有「担保金」），
+  BM25 这类词袋模型此时返回零条 —— 而全量注入的召回率恒为 1，不存在这个问题。
+- 检索会**帮倒忙**。无分数阈值时，任何字面重叠都会把不相关规则塞进上下文，诱导模型硬答超纲问题。
+
+代价是每次问答都要带全部规则，但这部分前缀稳定、可命中服务端上下文缓存，且规则库改一次要重启一次，
+不存在「知识频繁更新、要秒级生效」的场景。
+
+**这个结论是实测出来的**，不是拍脑袋：项目早期实现过完整的 BM25 检索链路并用 500 条标注集做过
+B0~B4 五方案对比，数据显示该规模下检索是负收益，于是把生产链路换成全量注入
+（决策记录见 [PROGRESS.md](PROGRESS.md)）。
+
+---
+
 ## 测试工具
 
-`tools/` 下的脚本都**不是**构建产物，是长期资产。分三类：造数据、评 RAG、离线测 AI 链路。
+`tools/` 下的脚本都**不是**构建产物，是长期资产。分两类：造数据、离线测 AI 链路。
 
 > 除 `fake_llm_sse.py` 外均需先起中间件；Python 脚本依赖 `pip install pymysql redis`。
 
@@ -74,39 +91,7 @@ linggong/
 报名 id 用雪花算法、GEO key `geo:job:{categoryId}`、名额 key `apply:stock:{jobId}`、
 关注 `follows:{userId}`、Feed `feed:{userId}`。
 
-### 二、RAG 评测
-
-这一组围绕 500 条标注集与 `docs/rag-eval-baseline.md`，跑一次就知道检索改动是涨是跌。
-
-| 文件 | 作用 | 用法 |
-| --- | --- | --- |
-| `gen_eval_set.py` | 生成 500 条评测集 → `backend/src/test/resources/ai/eval-set.json`。**自带 11 条自动校验**（id/query 唯一、tags 在词表内、超纲题 relevant 必空、任一标签样本数 <5 报错等）；改完必须走脚本，别手改 JSON | `python tools/gen_eval_set.py`<br>`python tools/gen_eval_set.py --category cross --sample 12` |
-| `check_semantic_gap.py` | **先行指标**：算 query 的 token 有多少落在语料词表之外（OOV）。BM25 是词袋模型，token 全 OOV 必然零召回 —— 不用等指标引擎就能先量化「口语化会不会打穿检索」 | `python tools/check_semantic_gap.py <rules.tsv>` |
-| `snapshot_rules.py` | 把 `tb_ai_rule` 快照成测试资源并打**指纹**。有了它评测**不连 DB 也能复现**，报告里可以声明「本次基线对应语料指纹 xxxx」 | `python tools/snapshot_rules.py` |
-| `propose_aliases.py` | 从标注集里**反推**该给哪条规则补哪些别名（按 OOV token 归集到规则并按频次排序），是别名扩展的候选生成器 | `python tools/propose_aliases.py` |
-| `gen_aliases.py` | 生成 B4 别名扩展表（口语说法 + 同音形近错别字）。**词驱动而非 query 驱动** —— 错别字是「词」的属性，与它出现在哪条 query 无关，否则就是对评测集过拟合 | `python tools/gen_aliases.py` |
-| `check_embeddings.py` | **C 阶段前置冒烟**：验证 DashScope 兼容模式的 `/embeddings` 能不能用、该用哪个模型、维度与耗时。C1 的「零新增依赖」是**假设不是事实**，不先验证就改 `AiModelConfig`、写 RRF，接口一旦不通整条 C1 返工 | `python tools/check_embeddings.py` |
-
-`check_embeddings.py` 会按错误类型分流，**明确区分「假设被证伪」与「根本没能测」**：
-账号欠费（`Arrearage`）是后者 —— 此时假设依然悬着，不该开始动 C1 的代码，充值后重跑即可。
-Key 读取顺序与环境变量/`application-local.yml` 一致，且只打印前 6 位。
-
-跑评测本身（指标引擎与基线阶梯都是 JUnit）：
-
-```bash
-cd backend
-mvn -o test -Dfile.encoding=UTF-8          # 全量，65 个用例
-mvn -o test -Dtest='BaselineLadderTest'    # 只重跑基线阶梯并重写 docs/rag-eval-baseline.md
-```
-
-> ⚠️ **`-Dfile.encoding=UTF-8` 不能省。** JVM 在 Windows 上默认按平台编码（GBK）写 stdout，
-> 产出的 Markdown 报告会乱码。这是交付物品质的底线。
->
-> ⚠️ 报告里的数字**全部由代码生成**，不要手抄进正文。§2 核心表与 §6.5 耗时表都从同一次实测注入
-> （占位符 `{{...}}` + `renderAnalysis()`），并有断言挡住没被替换的占位符 ——
-> 一边生成一边手写必然漂移。
-
-### 三、离线测 AI 链路
+### 二、离线测 AI 链路
 
 | 文件 | 作用 | 用法 |
 | --- | --- | --- |
@@ -114,9 +99,9 @@ mvn -o test -Dtest='BaselineLadderTest'    # 只重跑基线阶梯并重写 docs
 
 #### `fake_llm_sse.py` —— 不花 token 测 AI 外层链路
 
-RAG 链路的正确性分两层，测法完全不同：
+AI 链路的正确性分两层，测法完全不同：
 
-1. **内层**（检索、指标、trace 拼装）是纯逻辑，JUnit 就够；
+1. **内层**（trace 拼装、状态流转、截断）是纯逻辑，JUnit 就够；
 2. **外层**（SSE 流式输出、回答分片**跨线程累积**、首字延迟、客户端断开）**必须在真实 HTTP
    客户端上跑** —— 单测里 `Flux.just("好")` 合成的流不算数，它绕过了 langchain4j 的 SSE 解析、
    真实派发线程与分片时序。
@@ -154,6 +139,16 @@ netsh int ipv4 show excludedportrange protocol=tcp
 
 9099 就落在保留段 9093-9192 里，所以默认改用了 18999。
 
+### 跑测试
+
+```bash
+cd backend
+mvn -o test -Dfile.encoding=UTF-8
+```
+
+> ⚠️ **`-Dfile.encoding=UTF-8` 不要省。** JVM 在 Windows 上默认按平台编码（GBK）写 stdout，
+> 中文日志会变成乱码，排查失败用例时非常难受。
+
 ---
 
 ## 相关文档
@@ -162,6 +157,5 @@ netsh int ipv4 show excludedportrange protocol=tcp
 | --- | --- |
 | [PROGRESS.md](PROGRESS.md) | 进度清单，唯一事实来源 |
 | [CLAUDE.md](CLAUDE.md) | 稳定信息与工作规范 |
-| [docs/rag-eval-baseline.md](docs/rag-eval-baseline.md) | RAG 评测报告：B0~B4 五方案对比、k 敏感度、分 category、留出验证、Bad Case 归因 |
 | [docs/产品与技术文档.md](docs/产品与技术文档.md) | 产品与技术设计 |
 | [deploy/README.md](deploy/README.md) | 生产部署（nginx） |

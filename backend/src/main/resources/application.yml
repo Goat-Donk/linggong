@@ -98,7 +98,5 @@ linggong:
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api-key: ${DEEPSEEK_API_KEY:}
     model-name: deepseek-v3
-    # AI 问答助手 RAG 检索返回的候选规则条数
-    retrieval-top-k: 3
     # LLM 异常 / 未配置 Key 时的兜底话术
     fallback-reply: AI 服务暂时不可用，请稍后再试～

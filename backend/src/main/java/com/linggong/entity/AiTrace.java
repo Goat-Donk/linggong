@@ -8,14 +8,14 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * AI 问答检索追踪实体，对应表 tb_ai_trace。
+ * AI 问答追踪实体，对应表 tb_ai_trace。
  *
- * <p>一次问答一行，记录「问了什么 → 检索到什么 → 各段耗时 → 答了什么」。
+ * <p>一次问答一行，记录「问了什么 → 带了哪些规则依据 → 各段耗时 → 答了什么」。
  * 与 {@link Notification} 那类业务表不同，本表<b>不是业务数据</b>：它只服务于
  * Bad Case 归因和「这条回答的依据是什么」面板，因此写入失败绝不允许影响问答主流程
  * （见 {@code AiTraceRecorder}）。
  *
- * <p>{@code retrievedRuleIds} 与 {@code latencyBreakdown} 在库里是 varchar，
+ * <p>{@code injectedRuleIds} 与 {@code latencyBreakdown} 在库里是 varchar，
  * 存的是 JSON 文本，由 {@code AiTraceRecorder} 用 Jackson 序列化后写入。
  */
 @Data
@@ -45,8 +45,8 @@ public class AiTrace {
     /** 用户原始问题 */
     private String query;
 
-    /** 检索到的规则 id，JSON 数组文本，如 {@code [24,28]}；{@code []} 表示零召回 */
-    private String retrievedRuleIds;
+    /** 本次注入提示词的规则 id，JSON 数组文本，如 {@code [20,21,22]}；全量注入模式下为规则库全集 */
+    private String injectedRuleIds;
 
     /** 各段耗时，JSON 对象文本（毫秒）；未启用的阶段为 null */
     private String latencyBreakdown;

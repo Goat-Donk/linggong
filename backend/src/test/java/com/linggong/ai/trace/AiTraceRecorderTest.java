@@ -2,7 +2,6 @@ package com.linggong.ai.trace;
 
 import com.linggong.entity.AiTrace;
 import com.linggong.mapper.AiTraceMapper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,16 +28,11 @@ class AiTraceRecorderTest {
     private final AiTraceMapper mapper = mock(AiTraceMapper.class);
     private final AiTraceRecorder recorder = new AiTraceRecorder(mapper);
 
-    @AfterEach
-    void tearDown() {
-        TraceSession.end();
-    }
-
     @Test
     @DisplayName("正常路径：落一行，字段都搬对了")
     void persistsTrace() {
-        TraceSession session = TraceSession.begin(7L, 1, "押金压多少");
-        session.recordRetrieval(List.of(22L), 1_000_000L);
+        TraceSession session = TraceSession.start(7L, 1, "押金压多少");
+        session.recordInjectedRules(List.of(22L));
         session.appendAnswer("押金是……");
 
         recorder.persist(session);
@@ -50,7 +44,7 @@ class AiTraceRecorderTest {
         assertThat(saved.getUserId()).isEqualTo(7L);
         assertThat(saved.getUserRole()).isEqualTo(1);
         assertThat(saved.getQuery()).isEqualTo("押金压多少");
-        assertThat(saved.getRetrievedRuleIds()).isEqualTo("[22]");
+        assertThat(saved.getInjectedRuleIds()).isEqualTo("[22]");
         assertThat(saved.getFinalAnswer()).isEqualTo("押金是……");
         assertThat(saved.getStatus()).isEqualTo(AiTrace.STATUS_OK);
     }
@@ -60,7 +54,7 @@ class AiTraceRecorderTest {
     void neverPropagatesDbFailure() {
         when(mapper.insert(any(AiTrace.class)))
                 .thenThrow(new DataAccessResourceFailureException("DB 挂了"));
-        TraceSession session = TraceSession.begin(7L, 0, "q");
+        TraceSession session = TraceSession.start(7L, 0, "q");
         session.appendAnswer("答完了");
 
         assertThatCode(() -> recorder.persist(session)).doesNotThrowAnyException();
@@ -71,7 +65,7 @@ class AiTraceRecorderTest {
     void neverPropagatesMissingTable() {
         when(mapper.insert(any(AiTrace.class)))
                 .thenThrow(new RuntimeException("Table 'linggong.tb_ai_trace' doesn't exist"));
-        assertThatCode(() -> recorder.persist(TraceSession.begin(7L, 0, "q")))
+        assertThatCode(() -> recorder.persist(TraceSession.start(7L, 0, "q")))
                 .doesNotThrowAnyException();
     }
 
