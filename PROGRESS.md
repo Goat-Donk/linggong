@@ -345,15 +345,25 @@ d:\linggong\
   - **一处自我纠错（口径级）**：最初把 OOV 描述成「稀释 IDF」是**错的**。BM25 里 df=0 的 token 满足 `tf(t,d)=0`，对**每一篇**文档的贡献恰好为 0 —— **OOV token 是 score-neutral 的，不稀释任何东西**。两个反直觉推论：ⓐ **停用词过滤是零收益**（删掉「怎么」「多少」「么办」不改变任何排名），可作对照方案用来证明「不是停用词的锅」；ⓑ OOV 率的正确读法是「**信号覆盖率**」的反向指标，100% 才是硬性空召回，<100% 仅信号弱（仍有内容词可命中）。真正瓶颈在**内容词层面**：top-30 OOV 里「老板(11)/招人(5)/咋整(5)」这类词，语料侧写的是「雇主」「发布岗位」—— 只对**别名扩展**与**向量召回**有反应。
   - **out_of_scope 的配比设计**：75 条刻意分成 near_miss 40（含规则库高危词但实际超纲，如「担保金能开发票吗」「考勤记录能作为劳动仲裁证据吗」）+ 完全无关 35。**为什么这么配**：明显无关的问题靠零重叠就能拒答、测不出东西；只有 near_miss 才暴露得出「`retrieve()` 无任何分数阈值、只要有一个 2-gram 重叠就召回」这个真实缺陷 —— 这 40 条正是 C 阶段加阈值/拒答的对照基线。
 
+- **RAG 评测 Step A-2：指标引擎建成（项目首个 JUnit 测试）** —— `backend/src/test/java/com/linggong/ai/eval/`，6 个生产类 + 3 个测试类 / **32 个用例全绿**，**零新增依赖**（`spring-boot-starter-test` 本就在 pom，Jackson 由 web starter 带入）。
+  - 组件划分：`RankingMetrics`（纯函数，一次扫排序结果算齐五个指标）、`EvalSample` + `EvalSet`（加载 + 11 条结构性校验）、`QueryOutcome`、**`RankingRetriever`（全框架唯一的可插拔缝）**、`EvalReport`（聚合 + 分 category/tag/精查子集切片 + 超纲拒答 + Markdown 渲染）、`SanityRetrievers`（oracle / 空召回 / 随机三个标定参照）。**A-3 的 B0~B4 与 C 阶段的混合检索都只是 `RankingRetriever` 的不同实现**，跑同一份 500 条、同一套指标 —— 这是「度量先行」能被兑现的结构前提。
+  - **指标口径写死在代码注释里**（避免不同人算出不同数字）：相关性二值；`Precision@k` 分母**恒为 k**（TREC 口径，「没返回」等价于「返回了不相关」），故每张表同时输出**平均返回条数**作为它的重影，防止靠「少返回」刷准确率；`MRR@k` 只看**第一条**命中，多答案样本（cross，需 2~3 条规则答全）天然吃亏 → **必须与 `Recall@k` 同看**才能区分「答偏了」和「只答了一半」；`NDCG@k` 折损取 `1/log2(i+2)`；超纲题所有指标返回 **0 而非 NaN**（一个 NaN 能悄悄吃掉整列平均值），且不进主指标聚合。
+  - **标定方法：先用已知答案验证尺子准不准，再去量真实方案**。oracle（直接返回标准答案）→ `Hit@1/3/10 = 1.0`、`Recall@3 = 1.0`、`NDCG@3 = 1.0`，且 `Recall@1 = 399.667/425 = 0.9404`、`Precision@3 = 477/1275 = 0.3741`、`平均返回@3 = 477/425 = 1.1224` —— **与手算逐位吻合**（375 条单答案首位满分 + 48 条双答案只答一半 + 2 条三答案只答三分之一；命中数 375×1+48×2+2×3 = 477）。空召回策略 → 主指标全 0 但**拒答准确率 100%**；随机基线 → `Hit@1 = 0.0494 / Hit@3 = 0.1553`（19 条语料瞎猜的理论值 1/19≈0.0526、3/19≈0.1579）。三者构成 `oracle > random > empty` 有序区间。**全部断言都是纸笔算出来的，不是跑一遍抄输出** —— 后者只能证明代码没变，不能证明代码是对的。
+  - **一处自我纠错（测试侧）**：`mrrOnlyCountsFirstHit` 首跑失败 —— 我在注释里断言「IDCG 同值 → NDCG = 1.0」是**错的**：理想排序下两条答案应占第 1、2 位（IDCG = 1 + 0.6309），实际落在第 2、3 位（DCG = 0.6309 + 0.5），正确值 **0.6934**。代码是对的，错的是我的期望值。已改成把算式写进测试（`dcg/idcg` 两个变量）而非抄魔数。
+  - **契约校验刻意选择「抛错」而非「扣分」**：检索器返回 `null` / 含幻觉 id / 含重复 id 时 `EvalReport.evaluate` 立刻抛 `IllegalStateException` 并指出是哪条 query。把实现缺陷摊平成「分数低一点」，会让真正的 bug 藏在看起来合理的指标里；三条负例各有专门用例钉住。
+  - **两个环境发现**：① `surefire-junit-platform:3.5.4`（surefire 的 JUnit 平台 provider）不在本地仓库，`mvn -o` 会**直接失败** —— `src/test/java` 此前从不存在、项目从没跑过任何测试，故 provider 从未被下载；联网拉一次后已缓存，`-o` 恢复正常。② JVM 在 Windows 按**平台编码（GBK）**写 stdout，控制台看中文是乱码但字节正确 —— 已用 oracle 报告验证源文件本身是 UTF-8、中文无误；**A-3 落 `docs/rag-eval-baseline.md` 时必须显式 `UTF_8` 写入，不能靠平台默认值**。
+  - 把用户定的标签规则也钉进 Java 侧：`EvalSetTest` 断言「任一标签样本数 ≥ 5」且 `tagVocabulary` **不含 `omission`** —— Python 生成器管住「按脚本重新生成」这条路径，Java 校验管住「绕过脚本直接改 JSON」这条路径。
+  - 验证：`mvn -o test -Dtest='RankingMetricsTest,EvalSetTest,EvalReportTest'` → `Tests run: 32, Failures: 0, Errors: 0` / `BUILD SUCCESS`。
+
 ### 🔄 进行中
-- **RAG 评测 Step A-2：指标引擎** —— 评测集已就位（500 条），下一步写 `Hit@k / Recall@k / Precision@k / MRR@k / NDCG@k`。
+- **RAG 评测 Step A-3：基线阶梯与 k 敏感度** —— 指标引擎已就位（A-2，32 用例全绿），下一步接 B0~B4 五个真实检索方案并出 `docs/rag-eval-baseline.md`。
 - 简历工程（见下一步）。
 
 ### ⏭ 下一步
 - **RAG 评测（用户 2026-09-13 定优先级：A 度量先行 + B trace 绑定做）** —— 理由（用户原话转述）：没有 Hit@k / MRR / NDCG 就无法证明 RAG 优化有效，且这是纯本地、不花 token 的活，产出的是简历上含金量极高的量化数据；而只做评测不记录 `retrieved_ids`/耗时/工具调用序列，Bad Case 只能盲猜是哪一环出问题，trace 是评测的灵魂、也是面试「系统怎么排查问题」的真实工程故事。
   - **A-1 已完成**：500 条标注集（见上）。规模口径从此前的「50~80 条」正式升为 500 条，本文档旧描述同步作废。
-  - **A-2 指标引擎（下一步立刻做）**：位置 `backend/src/test/java/com/linggong/ai/eval/`，**项目第一个 JUnit 测试**（目前 `src/test/java` 目录都不存在）。纯函数实现 `Hit@k / Recall@k / Precision@k / MRR@k / NDCG@k`，不启 Spring、不连 DB、不调 LLM，直接复用生产 `Bm25ContentRetriever.tokenize()`（包级可见）。输出**逐 query 明细**而非只有平均值，Bad Case 归因靠它。超纲题（`relevant: []`）不进 MRR/NDCG，单独出「拒答准确率」。**纪律：主指标口径对齐线上 top-k=3（MRR@3 / Recall@3 / Hit@3），同时算 k=1/3/5/10 全档**（用户 2026-09-13 追加）。
-  - **A-3 基线阶梯与 k 敏感度**：B0 朴素 contains / B1 TF-only / B2 现状 BM25 / B3 BM25+tags 加权 / **B4 = B3 + 别名扩展**。⚠️ **B4 必须放在 A-3 之内而非之后的 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B2→B4 的差值就是别名扩展的真实收益。再做 k 敏感度分析，**用数据论证生产 top-k=3 的合理性**（而非为对齐简历改成 10）。产出 `docs/rag-eval-baseline.md`。
+  - **A-2 已完成**：指标引擎（见上，32 用例全绿）。
+  - **A-3 基线阶梯与 k 敏感度（下一步立刻做）**：B0 朴素 contains / B1 TF-only / B2 现状 BM25 / B3 BM25+tags 加权 / **B4 = B3 + 别名扩展**，全部实现 `RankingRetriever` 接口后跑同一份 500 条。⚠️ **B4 必须放在 A-3 之内而非之后的 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B2→B4 的差值就是别名扩展的真实收益。再做 k 敏感度分析，**用数据论证生产 top-k=3 的合理性**（而非为对齐简历改成 10）。产出 `docs/rag-eval-baseline.md`（**显式 UTF-8 写入**）。**一个必须当场解决的技术点**：`Bm25ContentRetriever.tokenize()` 是**包级可见**（`com.linggong.ai.rule.impl`），而评测代码在 `com.linggong.ai.eval` 够不着；且生产 `retrieve()` 依赖 Spring 注入的 `AiRuleMapper`、无法直接 new。**已选定的解法：不做「测试里再写一份 BM25」**（那会让基线数字描述的是测试的实现而不是生产的实现，证据链断掉），改为把生产的打分内核抽成不依赖 Spring 的纯类（吃 `List<AiRule>` + topK），`Bm25ContentRetriever` 退化为「查库 → 建索引 → 委派」的薄适配器 —— 抽取必须是**行为等价**的，抽完先跑 A-2 用例确认 B2 数字与现状一致再往下做。评测集已冻结（500 条），语料侧确认 19 条规则、`|R| ∈ {0,1,2,3}`、超纲 75（near_miss 40 + 无标签 35）、精查子集 120。
   - **B. trace**：每次问答记录 retrieved ruleIds + 工具调用序列 + 各段耗时。**schema 用户 2026-09-13 已拍板**（此前本文档「落表或日志」的开放表述作废）：`trace_id / query / retrieved_ruleIds(JSON 数组) / latency_breakdown(JSON 对象：查询改写 / BM25 / Rerank 各段耗时) / final_answer / timestamp`。**明确否决单一巨型 JSON 日志**。双重价值：① Bad Case 归因 ② 未来前端「这条回答的依据是什么」面板的数据源。**纪律：A-1~A-3 必须先跑完拿到基线数据再动 B**，不提前引入复杂依赖导致评测主线跑偏。
 - 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行；聊天演示数据已随 c549602 入库）。
 
