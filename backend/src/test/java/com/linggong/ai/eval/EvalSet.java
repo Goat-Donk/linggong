@@ -122,6 +122,20 @@ public record EvalSet(String version,
         return samples.stream().map(EvalSample::category).distinct().toList();
     }
 
+    /**
+     * 取子集，用于留出验证（如只看 id 奇数的验证集 B）。
+     *
+     * <p>子集的 {@code declaredQuota} 为空，因此<b>不适用</b> {@link #validate()} 的配额校验
+     * （配额天然只对全集成立）。其余校验逻辑不受影响。
+     */
+    public EvalSet subset(java.util.function.Predicate<EvalSample> predicate) {
+        List<EvalSample> picked = samples.stream().filter(predicate).toList();
+        if (picked.isEmpty()) {
+            throw new IllegalArgumentException("子集为空，切分条件写错了");
+        }
+        return new EvalSet(version, status, mainK, corpusSize, rulesIndex, picked, Map.of());
+    }
+
     /** 实际出现过的 tag，字母序。 */
     public List<String> tagVocabulary() {
         return samples.stream().flatMap(s -> s.tags().stream()).distinct().sorted().toList();

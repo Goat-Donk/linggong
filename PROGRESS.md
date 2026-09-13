@@ -355,15 +355,29 @@ d:\linggong\
   - 把用户定的标签规则也钉进 Java 侧：`EvalSetTest` 断言「任一标签样本数 ≥ 5」且 `tagVocabulary` **不含 `omission`** —— Python 生成器管住「按脚本重新生成」这条路径，Java 校验管住「绕过脚本直接改 JSON」这条路径。
   - 验证：`mvn -o test -Dtest='RankingMetricsTest,EvalSetTest,EvalReportTest'` → `Tests run: 32, Failures: 0, Errors: 0` / `BUILD SUCCESS`。
 
+- **RAG 评测 Step A-3：基线阶梯跑完，`docs/rag-eval-baseline.md` 落地** —— 5 个方案跑同一份 500 条，**37 个用例全绿**（A-2 的 32 + A-3 的 5）。
+  - **B2 的数字就是生产本身的数字**：`ProductionBm25` 用 Mockito 打桩 `AiRuleMapper.selectList()`，直接 new 出真实 `Bm25ContentRetriever` 并调它的 `loadRules()`/`retrieve()`，从返回 `Content` 的元数据取 `ruleId`。**生产代码零改动。** B2/B3/B4 是**同一个生产打分器**换语料（原始 / tags×2 / tags×2+别名），每步只隔离一个变量。
+  - **三条硬验证（都能失败，不是走过场）**：① `topKPrefixIsStable` —— 评测跑 topK=10 与线上 topK=3 的结果**逐条前缀一致**，证明 k≤3 各列反映的就是线上；② `emptyRetrievalMatchesOovPrediction` —— 把「零召回」用两个完全独立的路径算一遍（静态 OOV 词表预测 vs 动态跑生产检索器），**425 条逐条完全吻合**，正式确认了「零召回 ⟺ 全部 token 均 OOV」这个模型；③ 语料快照 `ai/rules.json` 带指纹 `d2d2177edec97480`，**不连 DB 也能复现**。
+  - **实测结论（与预期不符，按实测写）**：
+    1. **排序本身是数量级问题，排序算法是小数点问题**：B0→B1 的 Hit@3 是 **+0.3906**，后面三步加起来不到 +0.01。B0 的 Hit@10 有 0.8141（召回不差）但 MRR@3 仅 0.2718 —— 「有召回没排序等于没有」从常识变成了数字。
+    2. **BM25 在生产语料上没跑赢 TF-IDF**：Hit@1 0.6306 vs 0.7012、MRR@3 0.7169 vs 0.7600、NDCG@3 0.7290 vs 0.7651。机制清楚：k1 词频饱和与 b 长度归一是为「长文档、长度差异悬殊」设计的，19 条 58~130 字等长文本上 b 没有归一对象、k1 反而压平了有用的词频区分度。**结论不是「换掉 BM25」，而是「它还没轮到发挥」** —— 这给 D 阶段语料扩写提供了一个额外的量化理由。已用**绊线断言**钉住（失败信息里写明：若失败说明语料形态变了，要同步更新报告第 6 节，而不是删断言）。
+    3. **别名扩展是语料侧唯一确证有效的一步**：Hit@3 **+0.0212**、MRR@3 0.7169→0.7424、空召回率 **8.7%→5.2%**；**留出验证保留 89%**（全集 +0.0212 → 只从推导集 A 生成的别名在验证集 B 上仍有 +0.0188），证明不是抄评测集。**代价明确**：拒答准确率 34.7%→30.7%，词表放宽的同时放宽了超纲误召回。
+    4. **`near_miss` 超纲拒答准确率 = 0.0%（40/40 全军覆没）**，而无标签明显无关题是 74.3% —— 这个悬殊对比精确地把缺陷定位成「没有相似度阈值」（而不是「检索器不知道自己不知道」），成为 C 阶段加阈值的对照基线。
+    5. **`cross` 类 Recall@3（0.2333）远低于 Hit@3（0.3600）**，说明多规则问题平均要召回 2 条以上而 top-3 塞不下 —— **生产 top-k=3 对多规则问题偏小**，为 C 阶段「先多召回 top-N 再重排取 top-k」提供了依据。
+    6. **耗时差距来自「有没有索引」而非「用哪个公式」**：生产 `bm25()` 对每个 (文档, token) 组合线性扫全文数 tf，比预建 tf 索引的 B1 慢约 **7 倍**（96µs vs 13µs）。但相对一次 LLM 调用仍可忽略，**现在不优化**。
+  - **两条自我纠错**：① `List.getFirst()` 是 Java 21 API，本项目 JDK 17，编译失败 —— 改 `get(0)`；② 我最初断言「BM25 必然强于 TF-IDF」并写了 `assertThat(b2).isGreaterThanOrEqualTo(b1)`，**实测证伪**，已把断言改为与数据一致并额外钉住这条反直觉结论。**没有为了让预期成立去调数字。**
+  - **交付物**：`docs/rag-eval-baseline.md`（28.6 KB / 517 行 / `UTF-8` 显式写入，已验证零替换字符、控制台乱码不影响文件）。§7 的 bad case 归因与核心表**交叉自洽**（修好 11 − 弄坏 4 = 净 +7 = B2→B4 的 Hit@3 差 349→356）。
+  - 验证：`mvn -o test -Dfile.encoding=UTF-8` → `Tests run: 37, Failures: 0, Errors: 0` / `BUILD SUCCESS`。
+
 ### 🔄 进行中
-- **RAG 评测 Step A-3：基线阶梯与 k 敏感度** —— 指标引擎已就位（A-2，32 用例全绿），下一步接 B0~B4 五个真实检索方案并出 `docs/rag-eval-baseline.md`。
 - 简历工程（见下一步）。
 
 ### ⏭ 下一步
 - **RAG 评测（用户 2026-09-13 定优先级：A 度量先行 + B trace 绑定做）** —— 理由（用户原话转述）：没有 Hit@k / MRR / NDCG 就无法证明 RAG 优化有效，且这是纯本地、不花 token 的活，产出的是简历上含金量极高的量化数据；而只做评测不记录 `retrieved_ids`/耗时/工具调用序列，Bad Case 只能盲猜是哪一环出问题，trace 是评测的灵魂、也是面试「系统怎么排查问题」的真实工程故事。
   - **A-1 已完成**：500 条标注集（见上）。规模口径从此前的「50~80 条」正式升为 500 条，本文档旧描述同步作废。
   - **A-2 已完成**：指标引擎（见上，32 用例全绿）。
-  - **A-3 基线阶梯与 k 敏感度（下一步立刻做）**：B0 朴素 contains / B1 TF-only / B2 现状 BM25 / B3 BM25+tags 加权 / **B4 = B3 + 别名扩展**，全部实现 `RankingRetriever` 接口后跑同一份 500 条。⚠️ **B4 必须放在 A-3 之内而非之后的 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B2→B4 的差值就是别名扩展的真实收益。再做 k 敏感度分析，**用数据论证生产 top-k=3 的合理性**（而非为对齐简历改成 10）。产出 `docs/rag-eval-baseline.md`（**显式 UTF-8 写入**）。**一个必须当场解决的技术点**：生产 `Bm25ContentRetriever` 的构造依赖 Spring 注入的 `AiRuleMapper`，且 `tokenize()` 是**包级可见**（`com.linggong.ai.rule.impl`），而评测代码在 `com.linggong.ai.eval` 够不着。**解法（已核实可行，生产代码零改动）**：① **B2 直接驱动真实生产类** —— `AiRuleMapper extends BaseMapper<AiRule>` 是普通接口，用 Mockito 打桩 `selectList()` 喂入真实规则行，再调其 public 的 `loadRules()` + `retrieve()`，从返回 `Content` 的元数据取 `ruleId`。这样 **B2 的数字就是生产实现本身的数字**。② B0/B1/B3/B4 是测试侧 `RankingRetriever` 实现，其中 B1/B3 必须与 B2 **共用同一分词器**才构成公平对照 —— 在**测试源集**的 `com.linggong.ai.rule.impl` 下放一个一行桥接类调用包级 `tokenize()` 即可。**明确否决「在测试里重写一份 BM25」**：那会让基线数字描述的是测试的实现而不是生产的实现，整条证据链当场断掉。语料侧：把 `tb_ai_rule` 的 19 行**快照成测试资源**（`ai/rules.json`，含语料指纹），使评测**不连 DB 也能复现**；DB 可用时的快照一致性校验可做成条件启用，不作为 A-3 的硬性交付。评测集已冻结（500 条），语料侧确认 19 条规则、`|R| ∈ {0,1,2,3}`、超纲 75（near_miss 40 + 无标签 35）、精查子集 120。
+  - **A-3 已完成**：基线阶梯与 k 敏感度（见上）。执行序列按用户拍板为 **B0 朴素 contains → B1 TF-IDF → B2 现状 BM25 → B3 BM25+tags 加权 → B4 = B3 + 别名扩展**（用户把 B1 从此前设想的「纯 TF」改成 **TF-IDF**：这样 B1→B2 恰好隔离出 k1 饱和与 b 归一化，故事更干净）。⚠️ **B4 已按用户要求留在 A-3 之内而非推到 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B3→B4 的差值就是别名扩展的真实收益。**技术点已按预定方案解决**（生产代码零改动）：B2 直接 new 真实 `Bm25ContentRetriever` 并用 Mockito 打桩 `selectList()` 喂语料；B0/B1 复用同一分词器（测试源集的 `com.linggong.ai.rule.impl.TokenizerBridge` 一行桥接包级 `tokenize()`）以保证差异只来自打分方式。**曾明确否决「在测试里重写一份 BM25」**——那会让基线描述测试的实现而非生产的实现。
+  - **A 阶段整体完成**，下一步进入 **B（trace 表）**。
   - **B. trace**：每次问答记录 retrieved ruleIds + 工具调用序列 + 各段耗时。**schema 用户 2026-09-13 已拍板**（此前本文档「落表或日志」的开放表述作废）：`trace_id / query / retrieved_ruleIds(JSON 数组) / latency_breakdown(JSON 对象：查询改写 / BM25 / Rerank 各段耗时) / final_answer / timestamp`。**明确否决单一巨型 JSON 日志**。双重价值：① Bad Case 归因 ② 未来前端「这条回答的依据是什么」面板的数据源。**纪律：A-1~A-3 必须先跑完拿到基线数据再动 B**，不提前引入复杂依赖导致评测主线跑偏。
 - 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行；聊天演示数据已随 c549602 入库）。
 
