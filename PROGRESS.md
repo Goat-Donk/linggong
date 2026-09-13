@@ -369,6 +369,23 @@ d:\linggong\
   - **交付物**：`docs/rag-eval-baseline.md`（28.6 KB / 517 行 / `UTF-8` 显式写入，已验证零替换字符、控制台乱码不影响文件）。§7 的 bad case 归因与核心表**交叉自洽**（修好 11 − 弄坏 4 = 净 +7 = B2→B4 的 Hit@3 差 349→356）。
   - 验证：`mvn -o test -Dfile.encoding=UTF-8` → `Tests run: 37, Failures: 0, Errors: 0` / `BUILD SUCCESS`。
 
+- **RAG 评测 Step B：运行时 trace 表落地，三种结束状态都在真实流式链路上跑通** —— `tb_ai_trace`（`db.sql` 第 22 节）+ `AiTrace`/`AiTraceMapper` + `com.linggong.ai.trace` 包 5 个类，**65 个用例全绿**（A-2/A-3 的 37 + B 的 28）。
+  - **两条线程，两种手段**（这是整个设计的地基，且是**从字节码核实过的**，不是推断）：用 `javap` 看 `DefaultAiServices$1`，`retrievalAugmentor.augment(...)` 是在代理方法体里**同步**调用的（偏移 322），结果再塞进 `AiServiceTokenStreamParameters`（偏移 583）—— 所以 **检索跑在调用方线程上**，`ThreadLocal` 拿得到；而**回答分片在模型回调线程**上到达，那条线程没有 ThreadLocal，必须靠**闭包捕获** session。混为一谈就会丢一半数据。`TraceSession` 的类注释写明了这一点。
+  - **做成装饰器而不是改检索实现**：`TracingRuleRetriever implements RuleContentRetriever`，包住真正的检索器。C 阶段要加向量召回 + RRF 融合时，**追踪自动跟着走，不用重写**。三条硬性质：返回结果一个字节不改（`ruleId`/`title` 是 trace 与评测的共同依赖）、**异常原样上抛**（埋点不许把故障吞成「零召回」，那会把 bug 伪装成一次正常拒答）、没有会话时静默透传（A-3 评测直接 new 生产检索器，不经过这里）。
+  - **顺带把 C0 的门面做掉了**：`AiAssistant` 从绑实现名 `ruleBm25Retriever` 改为绑固定名 `ruleRetriever`（装饰器即门面）。此前换检索策略就得改 `@AiService` 注解；现在只改注入。**C 阶段的 C0 只剩 `AiOptimizeServiceImpl:42` 注入 `ChatModel` 接口那一处。**
+  - **容错对齐既有思路**：落库失败只 `log.error` 不外抛（`AiTraceRecorder`，跑在流结束回调里，这里抛异常会直接打断用户已经拿到的回答）；JSON 序列化失败退化成 `[]`/`{}`（`AiTraceJson`）。**未启用的阶段显式写 `null` 而不是 0** —— 否则「还没实现」和「快到 0 毫秒」在数据里长得一模一样。
+  - **真机端到端验证（不是只有单测）**：起真实后端 + 真实登录 + 真实 SSE 调用，**三种状态全部在真实流式链路上跑出来**：
+    | 状态 | 触发 | 落库结果 |
+    | --- | --- | --- |
+    | `OK` | 正常答完 | `retrieved_rule_ids=[30,31,29]`、`bm25Ms=2`、`firstTokenMs=333`、`final_answer` 完整 |
+    | `ERROR` | 模型调用失败 | 检索段照记、`final_answer` 为空、`firstTokenMs=null` |
+    | `INCOMPLETE` | 客户端中途断开（curl 掐断） | **仍落库**、`final_answer` 是半句「平台从每笔已完成订单中抽取」、没有会话泄漏 |
+  - **⚠️ 环境阻塞（需要用户处理，非代码问题）**：**DashScope 账号欠费** —— `InvalidRequestException: {"type":"Arrearage","code":"Arrearage"}`。当前所有问答都会走兜底话术「AI 服务暂时不可用」，`tb_ai_trace` 里会是一排 `status=ERROR`。**充值后即恢复，代码无需改动。**
+  - **trace 表的第一次实际产出（Bad Case 归因的实证）**：`押金压多少` 零召回。查库确认**语料 19 条里根本没有「押金」二字**，最近的近义概念是「担保金」（规则 22/23）—— 也就是说这次 `[]` 是**正确行为**（问题超出语料范围），不是检索缺陷。**没有 trace 表的话，这个结论要靠手工查库才能得出。** 顺带得到 D 阶段别名扩展的一个具体候选：`押金/保证金 → 担保金`。
+  - **修掉一个真实的交付物缺陷**：`docs/rag-eval-baseline.md` 的 §2 核心表是**生成**的、§6.5 的耗时表原先是我**手抄**进正文的，重跑一次 `mvn test` 两者就对不上（实测耗时重跑波动可达 30%，报告里出现了两套数字）。已把 §6.5 的数字全部改成占位符 `{{...}}` 由 `renderAnalysis()` 注入，并加断言 `doesNotContain("{{")` 挡住拼错名字。**只要一边生成一边手写，漂移就是必然的。**
+  - 验证：`mvn -o test -Dfile.encoding=UTF-8` → `Tests run: 65, Failures: 0, Errors: 0` / `BUILD SUCCESS`。
+  - 环境备注：为验证「OK 路径」（欠费下真实模型调不通），临时写了一个本地假 LLM SSE 桩，用 `--linggong.ai.base-url` 指过去跑通了完整链路。桩在 `backend/target/fake_llm_sse.py`（**`mvn clean` 会删掉**，如需长期保留应挪进 `tools/`）。另：Windows 保留端口段会 `bind` 失败（`WinError 10013`），桩的端口从 9099 改到了 18999。
+
 ### 🔄 进行中
 - 简历工程（见下一步）。
 
@@ -377,7 +394,8 @@ d:\linggong\
   - **A-1 已完成**：500 条标注集（见上）。规模口径从此前的「50~80 条」正式升为 500 条，本文档旧描述同步作废。
   - **A-2 已完成**：指标引擎（见上，32 用例全绿）。
   - **A-3 已完成**：基线阶梯与 k 敏感度（见上）。执行序列按用户拍板为 **B0 朴素 contains → B1 TF-IDF → B2 现状 BM25 → B3 BM25+tags 加权 → B4 = B3 + 别名扩展**（用户把 B1 从此前设想的「纯 TF」改成 **TF-IDF**：这样 B1→B2 恰好隔离出 k1 饱和与 b 归一化，故事更干净）。⚠️ **B4 已按用户要求留在 A-3 之内而非推到 D 阶段**：别名扩展会改 `searchText` 与 IDF 分布，若等 A-3 跑完再改语料，B0~B3 基线**当场失效**；做成并列方案后，B3→B4 的差值就是别名扩展的真实收益。**技术点已按预定方案解决**（生产代码零改动）：B2 直接 new 真实 `Bm25ContentRetriever` 并用 Mockito 打桩 `selectList()` 喂语料；B0/B1 复用同一分词器（测试源集的 `com.linggong.ai.rule.impl.TokenizerBridge` 一行桥接包级 `tokenize()`）以保证差异只来自打分方式。**曾明确否决「在测试里重写一份 BM25」**——那会让基线描述测试的实现而非生产的实现。
-  - **A 阶段整体完成**，下一步进入 **B（trace 表）**。
+  - **A 阶段整体完成**。
+  - **B 已完成**：运行时 trace 表（见上），三种结束状态真机跑通。**A 阶段与 B 阶段整体完成**，下一步进入 **C（C0 收尾 → C1 向量化冒烟 → C2 RRF 融合 → C4 降级）**。
   - **B. trace**：每次问答记录 retrieved ruleIds + 工具调用序列 + 各段耗时。**schema 用户 2026-09-13 已拍板**（此前本文档「落表或日志」的开放表述作废）：`trace_id / query / retrieved_ruleIds(JSON 数组) / latency_breakdown(JSON 对象：查询改写 / BM25 / Rerank 各段耗时) / final_answer / timestamp`。**明确否决单一巨型 JSON 日志**。双重价值：① Bad Case 归因 ② 未来前端「这条回答的依据是什么」面板的数据源。**纪律：A-1~A-3 必须先跑完拿到基线数据再动 B**，不提前引入复杂依赖导致评测主线跑偏。
 - 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行；聊天演示数据已随 c549602 入库）。
 

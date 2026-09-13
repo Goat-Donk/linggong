@@ -351,3 +351,28 @@ INSERT INTO `tb_ai_rule` (`title`, `tags`, `content`) VALUES
  '雇主可以下架自己发布的岗位。但如果这个岗位还有录用工人在做工，不能直接下架，必须先结算（结算会自动下架）；已经结算过的岗位无需重复下架。'),
 ('常见问题：工资多久到账', '常见问题,工资,到账,提现',
  '工资在岗位结算时立即到账钱包（会收到「工资到账」通知），可以马上提现。注意：工资按实际核销的考勤天数计算，不是按报名天数；考勤没过核销的天不计薪。');
+
+-- ---------- 22. AI 问答检索追踪（RAG 链路运行时 trace） ----------
+-- 一次问答写一行。用途有二：① Bad Case 归因（这条回答检索到了什么、各段耗时多少）
+-- ② 前端「这条回答的依据是什么」面板的数据源。
+-- 刻意拆成结构化列而非一个大 JSON 日志：query / 规则 id 要能直接 where 和 group by，
+-- 塞进 JSON blob 里就只能全表捞出来在应用层过滤了。
+-- retrieved_rule_ids 与 latency_breakdown 用 varchar 存 JSON 文本而非原生 JSON 类型：
+-- 原生 JSON 列会在写入时校验并报错，而本表的埋点是「失败仅告警、绝不打断问答主流程」，
+-- 两者取向冲突；JSON 文本仍可被 JSON_CONTAINS 等函数直接消费，能力不打折。
+CREATE TABLE IF NOT EXISTS `tb_ai_trace` (
+    `id`                 bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `trace_id`           char(32)     NOT NULL COMMENT '追踪 id，一次问答一个（32 位无横线 UUID）',
+    `user_id`            bigint       DEFAULT NULL COMMENT '提问人 id（Bad Case 归因要能定位到人）',
+    `user_role`          tinyint      DEFAULT NULL COMMENT '提问人角色：0打工人 1雇主（同一问题两种角色答案不同）',
+    `query`              varchar(512) NOT NULL COMMENT '用户原始问题',
+    `retrieved_rule_ids` varchar(255) NOT NULL DEFAULT '[]' COMMENT '检索到的规则 id，JSON 数组；[] 表示零召回（拒答）',
+    `latency_breakdown`  varchar(512) NOT NULL DEFAULT '{}' COMMENT '各段耗时 JSON 对象（毫秒）；未启用的阶段为 null',
+    `final_answer`       varchar(2048) DEFAULT NULL COMMENT '最终回答（超长截断，仅用于归因）',
+    `status`             varchar(16)  NOT NULL DEFAULT 'OK' COMMENT '结束状态：OK正常 / ERROR流内异常 / INCOMPLETE未正常结束',
+    `create_time`        datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_trace_id` (`trace_id`),
+    KEY `idx_user_time` (`user_id`, `create_time`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 问答检索追踪（RAG 链路 trace）';

@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  * </ul>
  */
 @Slf4j
-@Component("ruleBm25Retriever")
+@Component("ruleBm25ContentRetriever")
 public class Bm25ContentRetriever implements RuleContentRetriever {
 
     /** BM25 词频饱和参数 */

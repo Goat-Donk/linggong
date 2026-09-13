@@ -212,6 +212,8 @@ class BaselineLadderTest {
 
         assertThat(Files.readString(REPORT_PATH, StandardCharsets.UTF_8)).isEqualTo(md);
         assertThat(md).doesNotContain("NaN").doesNotContain("Infinity");
+        // 占位符没被替换掉 = 报告里会留一个 {{...}} 给读者看；拼错名字时这条会挡住
+        assertThat(md).as("§6 正文里的占位符必须全部被替换").doesNotContain("{{");
 
         System.out.println(renderCoreTable());
         System.out.println(renderDeltas());
@@ -313,12 +315,50 @@ class BaselineLadderTest {
         sb.append("## 5. B4 留出验证（防过拟合）\n\n");
         sb.append(renderHoldout()).append('\n');
 
-        sb.append("## 6. 分析\n\n").append(ANALYSIS).append('\n');
+        sb.append("## 6. 分析\n\n").append(renderAnalysis()).append('\n');
 
         sb.append("## 7. B4 相对 B2 的 Bad Case 归因\n\n");
         sb.append(renderCaseDiff()).append('\n');
 
         return sb.toString();
+    }
+
+    /**
+     * §6 的分析正文。其中所有耗时数字都<b>不手抄</b>，用占位符在这里注入。
+     *
+     * <p>起因是一次真事故：§6.5 的耗时表原先是我手写进正文的，而 §2 的核心表是生成的。
+     * 重跑一次 {@code mvn test}，§2 刷新了、§6.5 没动，同一份报告里就出现了两套数字
+     * （实测重跑一次的波动能到 30%）。只要一边生成一边手写，漂移就是必然的 ——
+     * 所以正文里只留 {@code {{...}}} 占位符，数字统一由这里注入。
+     */
+    private String renderAnalysis() {
+        StringBuilder table = new StringBuilder("| 方案 | µs/query |\n| --- | --- |\n");
+        for (Scheme s : ladder) {
+            table.append("| ").append(s.code()).append(" | ").append(us(s.avgMicros())).append(" |\n");
+        }
+        // 不断言「B0 约等于 B1」的精确倍数：这个量级的单次测量噪声很大（重跑一次能差 30%），
+        // 唯一稳的说法是两者都远低于 B2，所以只陈述这个。
+        table.append("\nB0 与 B1 分别是 ").append(us(avgMicros("B0"))).append("µs 与 ")
+                .append(us(avgMicros("B1"))).append("µs，同属一个量级，都远低于 B2 的 ")
+                .append(us(avgMicros("B2"))).append("µs。");
+        return ANALYSIS
+                .replace("{{TIMING_TABLE}}", table.toString())
+                .replace("{{RATIO}}", us(avgMicros("B2") / avgMicros("B1")))
+                .replace("{{B0_US}}", us(avgMicros("B0")))
+                .replace("{{B1_US}}", us(avgMicros("B1")))
+                .replace("{{B2_US}}", us(avgMicros("B2")))
+                .replace("{{B3_US}}", us(avgMicros("B3")))
+                .replace("{{B4_US}}", us(avgMicros("B4")));
+    }
+
+    private double avgMicros(String code) {
+        return ladder.stream().filter(s -> s.code().equals(code)).findFirst()
+                .orElseThrow(() -> new IllegalStateException("方案 " + code + " 不在阶梯里"))
+                .avgMicros();
+    }
+
+    private static String us(double micros) {
+        return String.format(Locale.ROOT, "%.1f", micros);
     }
 
     private String renderCoreTable() {
@@ -569,21 +609,15 @@ class BaselineLadderTest {
             而在于它没有任何相似度阈值 —— 只要有一个 2-gram 重叠就返回内容。**
             这是 C 阶段「加分数阈值 + 拒答」要解决的问题，而这组数字就是它的对照基线。
 
-            ### 6.5 耗时：生产 BM25 比有索引的 TF-IDF 慢约 7 倍
+            ### 6.5 耗时：生产 BM25 比有索引的 TF-IDF 慢约 {{RATIO}} 倍
 
-            | 方案 | µs/query |
-            | --- | --- |
-            | B0 | 13.8 |
-            | B1 | 13.0 |
-            | B2 | 96.3 |
-            | B3 | 89.4 |
-            | B4 | 88.1 |
+            {{TIMING_TABLE}}
 
-            B0 与 B1 都在 13~14µs，几乎一样。这不奇怪：两者都只做一次分词，然后在 19 篇文档上跑一个很轻的循环。
+            这不奇怪：B0 与 B1 都只做一次分词，然后在 19 篇文档上跑一个很轻的循环。
             B1 虽然多了 tf·idf 的计算，但它在**建索引时**就把每篇文档的 tf 装进了 HashMap，
             查询时是 O(Q) 次哈希查找，并不比 B0 的子串扫描更贵。
 
-            **真正的差距在 B1 → B2：13µs → 96µs，约 7 倍。** 而这个差距不是 BM25 公式比 TF-IDF 贵造成的
+            **真正的差距在 B1 → B2：{{B1_US}}µs → {{B2_US}}µs，约 {{RATIO}} 倍。** 而这个差距不是 BM25 公式比 TF-IDF 贵造成的
             （BM25 只多两次乘除），看生产代码就清楚了：
 
             ```java
@@ -600,15 +634,17 @@ class BaselineLadderTest {
             整体复杂度 O(N × Q × docLen)。19 条文档 × 约 10 个 query token × 约 150 个文档 token
             ≈ **每次查询三万次字符串比较，全部现算** —— 而 B1 做的是同一件事，只是在建索引时算了一次。
 
-            所以在 19 条语料上，**「打分公式选哪个」对耗时的影响可以忽略，「有没有索引」才是那 7 倍。**
+            所以在 19 条语料上，**「打分公式选哪个」对耗时的影响可以忽略，「有没有索引」才是那 {{RATIO}} 倍。**
             规划里那条「无 posting list、线性全扫」不是理论隐患，而是已经量出来的成本。
-            不过 96µs 相对于一次 LLM 调用（数百毫秒起）仍然完全可以忽略，**现在不值得优化**；
+            不过 {{B2_US}}µs 相对于一次 LLM 调用（数百毫秒起）仍然完全可以忽略，**现在不值得优化**；
             语料涨到几千条时它才会变成真问题，那时再补倒排索引也不迟。
 
-            B2 / B3 / B4 之间的差异（96.3 / 89.4 / 88.1，约 ±8%）**不解读**：
+            B2 / B3 / B4 之间的差异（{{B2_US}} / {{B3_US}} / {{B4_US}}）**不解读**：
             语料更长（tags 重复、别名）按理应该更慢，实测反而略快，方向与理论相反。
             最可能的原因是测量顺序效应 —— 三个方案按 B0→B4 顺序计时，排在后面的享受到了更充分的 JIT 预热。
             量级结论不受影响，但这提醒一件事：**这张耗时表只适合读量级，不适合读排名。**
+            同理，上面那个 {{RATIO}} 倍在重跑时会在 5~9 之间浮动（分子分母都是微秒级测量），
+            「差一个数量级」这个结论才是稳的。
 
             ### 6.6 精查子集确实是更难的
 

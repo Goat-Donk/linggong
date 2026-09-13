@@ -13,7 +13,9 @@ import reactor.core.publisher.Flux;
  *
  * <p>一个完整的 langchain4j Agent 装配示例：
  * <ul>
- *   <li>{@code contentRetriever}：RAG 检索增强 —— 平台规则知识库（Bm25ContentRetriever，BM25 关键词检索）；</li>
+ *   <li>{@code contentRetriever}：RAG 检索增强 —— 绑的是<b>固定的门面 bean 名</b> {@code ruleRetriever}
+ *       （由 TracingRuleRetriever 实现：加追踪，再委派给真正的检索实现）。换检索策略时只改门面里的
+ *       注入，不必动本注解；</li>
  *   <li>{@code tools}：函数调用（Agent）—— 5 个只读工具实时查个人业务数据，返回 JSON 供 LLM 转述；</li>
  *   <li>{@code chatMemoryProvider}：Redis 会话记忆，按 memoryId（用户 id）隔离，最多 20 条；</li>
  *   <li>返回 {@code Flux<String>}：SSE 流式输出，前端逐字渲染。</li>
@@ -25,7 +27,7 @@ import reactor.core.publisher.Flux;
         chatModel = "openAiChatModel",
         streamingChatModel = "openAiStreamingChatModel",
         chatMemoryProvider = "chatMemoryProvider",
-        contentRetriever = "ruleBm25Retriever",
+        contentRetriever = "ruleRetriever",
         tools = {"walletTool", "applicationTool", "settlementTool", "jobTool", "attendanceTool"}
 )
 public interface AiAssistant {
