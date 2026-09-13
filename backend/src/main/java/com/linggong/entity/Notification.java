@@ -27,6 +27,12 @@ public class Notification {
     public static final String TYPE_APPLY_QUIT = "APPLY_QUIT";
     /** 通知类型：雇主取消已录用 */
     public static final String TYPE_APPLY_DISMISS = "APPLY_DISMISS";
+    /**
+     * 通知类型：报名未成功（异步落单阶段被静默丢弃）。
+     * 触发于 JobApplicationConsumer 的两条兜底分支：落单前命中雇主黑名单、撞一人一单 DB 唯一键。
+     * 文案对用户脱敏（不区分具体原因），仅告知报名未成功。
+     */
+    public static final String TYPE_APPLY_FAILED = "APPLY_FAILED";
 
     /** 主键，自增 */
     @TableId(type = IdType.AUTO)

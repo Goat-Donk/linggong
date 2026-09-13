@@ -6,9 +6,11 @@ import com.linggong.dto.ApplyMessage;
 import com.linggong.entity.EmployerBlacklist;
 import com.linggong.entity.Job;
 import com.linggong.entity.JobApplication;
+import com.linggong.entity.Notification;
 import com.linggong.mapper.EmployerBlacklistMapper;
 import com.linggong.mapper.JobApplicationMapper;
 import com.linggong.mapper.JobMapper;
+import com.linggong.service.INotificationService;
 import com.linggong.utils.CacheClient;
 import com.linggong.utils.MqConstants;
 import com.linggong.utils.RedisConstants;
@@ -30,9 +32,11 @@ import java.nio.charset.StandardCharsets;
  * <ul>
  *   <li>幂等：以报名单号（主键）判重，重复消息直接 ACK 丢弃，保证消费不产生重复记录；</li>
  *   <li>一人一单 DB 兜底：表唯一键 uk_job_worker_active 保证「同岗同工人仅一条进行中报名」，
- *       即便 Redis apply:order 漂移导致 Lua 放行，重复落单也会在此撞唯一键被静默丢弃（补回 Redis 名额）；</li>
+ *       即便 Redis apply:order 漂移导致 Lua 放行，重复落单也会在此撞唯一键被丢弃（补回 Redis 名额）；</li>
  *   <li>黑名单兜底：HTTP 报名时已校验一次，此处再兜底「校验后 → 落单前」雇主拉黑的极小竞态，
- *       命中则静默拒绝（不落库、不扣 DB 名额），并归还 Lua 已扣的 Redis 名额后 ACK；</li>
+ *       命中则不落库、不扣 DB 名额，并归还 Lua 已扣的 Redis 名额；</li>
+ *   <li>丢弃必通知：上面两条丢弃分支都会给工人补一条脱敏站内通知（见 {@link #notifyApplyFailed}），
+ *       避免「前端提示报名成功、我的报名里却查不到」的体验断层；</li>
  *   <li>手动 ACK：落单成功 basicAck；落单异常 basicNack(requeue=false) 进死信队列，避免丢失；</li>
  *   <li>扣名额：UPDATE headcount = headcount - 1 WHERE headcount &gt; 0，防止扣成负数。</li>
  * </ul>
@@ -46,15 +50,18 @@ public class JobApplicationConsumer {
     private final CacheClient cacheClient;
     private final EmployerBlacklistMapper employerBlacklistMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final INotificationService notificationService;
 
     public JobApplicationConsumer(JobApplicationMapper jobApplicationMapper, JobMapper jobMapper,
                                   CacheClient cacheClient, EmployerBlacklistMapper employerBlacklistMapper,
-                                  StringRedisTemplate stringRedisTemplate) {
+                                  StringRedisTemplate stringRedisTemplate,
+                                  INotificationService notificationService) {
         this.jobApplicationMapper = jobApplicationMapper;
         this.jobMapper = jobMapper;
         this.cacheClient = cacheClient;
         this.employerBlacklistMapper = employerBlacklistMapper;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.notificationService = notificationService;
     }
 
     @RabbitListener(queues = MqConstants.JOB_APPLICATION_QUEUE)
@@ -77,6 +84,7 @@ public class JobApplicationConsumer {
                 log.info("报名落单前命中黑名单，静默拒绝并归还名额，jobId={}, workerId={}",
                         msg.getJobId(), msg.getWorkerId());
                 restoreStock(msg);
+                notifyApplyFailed(msg);
                 channel.basicAck(deliveryTag, false);
                 return;
             }
@@ -97,6 +105,7 @@ public class JobApplicationConsumer {
                 log.info("报名落单撞一人一单 DB 唯一键（同岗同工人已有进行中报名），静默丢弃并归还名额，jobId={}, workerId={}",
                         msg.getJobId(), msg.getWorkerId());
                 restoreStockForDuplicate(msg);
+                notifyApplyFailed(msg);
                 channel.basicAck(deliveryTag, false);
                 return;
             }
@@ -154,5 +163,29 @@ public class JobApplicationConsumer {
                 RedisConstants.APPLY_ORDER_KEY + msg.getJobId(),
                 String.valueOf(msg.getWorkerId()));
         cacheClient.delete(RedisConstants.CACHE_JOB_KEY + msg.getJobId());
+    }
+
+    /**
+     * 报名在异步落单阶段被静默丢弃时，给工人补一条站内通知。
+     *
+     * <p><b>为什么必须发</b>：HTTP 报名在 Lua 扣减成功后就把雪花单号返回给了用户（前端提示「报名成功」），
+     * 而记录是在这里才落库的。上面两条兜底分支把消息丢弃后，用户去「我的报名」查不到任何记录，
+     * 中间没有任何提示——这是比「报名失败」严重得多的体验断层（用户以为报上了，实际没有，可能错过岗位）。
+     *
+     * <p><b>为什么文案脱敏</b>：不区分「被雇主拉黑」与「重复报名撞唯一键」，统一说不成功。
+     * 黑名单是雇主侧的治理手段，直白告知会让工人知道被谁拉黑、诱发双方对抗；
+     * 且工人知道具体拦截机制也没有可操作的下一步，提示「选择其他岗位」才是有效引导。
+     *
+     * <p><b>为什么 try-catch</b>：通知是「丢弃」这个结论的附带补偿，不是主流程。
+     * 通知落库失败若往外抛，消息会被 basicNack 转投死信队列——但消息本身的处理（丢弃 + 归还名额）
+     * 已经执行完了，进死信只会误导后续人工排查。故失败仅告警，不影响 ACK。
+     */
+    private void notifyApplyFailed(ApplyMessage msg) {
+        try {
+            notificationService.notify(msg.getWorkerId(), Notification.TYPE_APPLY_FAILED,
+                    "报名未成功", "很抱歉，报名未成功，请选择其他岗位", msg.getJobId());
+        } catch (Exception e) {
+            log.warn("报名未成功通知发送失败，workerId={}, jobId={}", msg.getWorkerId(), msg.getJobId(), e);
+        }
     }
 }

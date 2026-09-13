@@ -331,12 +331,18 @@ d:\linggong\
 
 - 缺陷修复：编辑岗位名额未与 Redis 同步 + AI 默认配置指向不可用模型 —— ① [JobServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobServiceImpl.java) `update()` 新增 `resetApplyCache(jobId)`：Redis 报名名额（`apply:stock:`）此前只在发岗时预热一次、之后仅由 Lua 逐次扣减，**编辑岗位改了 headcount 完全不碰它** → 改小名额 Redis 仍按旧值放行（Lua 判过、落库 `deductHeadcount` 已扣到 0 只打 warn）造成**超额录用**，改大名额则报不满。修法：编辑的前置校验已保证该岗位无进行中报名（无 status=0 待确认 / 1 已录用），此时 DB `headcount` 即真实剩余名额，故直接删 `apply:stock:` + `apply:order:`（后者本应为空，删掉同时复位漂移），由下次报名的 `preheatApplyStock`(setIfAbsent) 从 DB 懒加载重建，不用算差额、不与并发报名抢写。② [application.yml](d:/linggong/backend/src/main/resources/application.yml) `linggong.ai.*` 默认值 `api.deepseek.com` + `deepseek-chat`（本机无权限）改为 `dashscope.aliyuncs.com/compatible-mode/v1` + `deepseek-v3`（本机实际可用），[AiModelConfig](d:/linggong/backend/src/main/java/com/linggong/config/AiModelConfig.java) 的 `@Value` 兜底默认值同步对齐 —— 修前不带 `-Dspring.profiles.active=local` 启动时 AI 接口会静默降级成兜底话术（不报错，极难排查）。`mvn compile` 通过。
 
+- 履约体验补强（③ 雇主补记二次确认 + ④ 报名静默失败补通知）—— **用户 2026-09-13 拍板口径**：③ **不做硬拦截**（「必须有到岗记录才能补记」会误伤线下已干活但没打卡的真实场景），改为把风险显式交还雇主；④ **必须补通知**，但文案脱敏、不透露具体拦截原因。
+  - ④ 后端：[Notification](d:/linggong/backend/src/main/java/com/linggong/entity/Notification.java) 加类型 `TYPE_APPLY_FAILED`；[JobApplicationConsumer](d:/linggong/backend/src/main/java/com/linggong/mq/JobApplicationConsumer.java) 注入 `INotificationService`，两条静默丢弃分支（黑名单兜底 / 撞一人一单唯一键）在归还名额后补发通知 `notifyApplyFailed`，文案统一「很抱歉，报名未成功，请选择其他岗位」。**为什么必须发**：HTTP 报名在 Lua 扣减成功时已把雪花单号返回给前端（提示「报名成功」），记录却是在消费者里才落库的，丢弃后用户去「我的报名」查不到、中间零提示——用户以为报上了实际没有，可能直接错过岗位。**为什么脱敏**：不区分黑名单与撞唯一键，既避免让工人知道被谁拉黑诱发双方对抗，也因为工人知道拦截机制也无可操作的下一步。**为什么 try-catch 包住**：通知是「丢弃」结论的附带补偿而非主流程，落库失败若外抛会让消息 basicNack 转投死信，但消息本身的处理（丢弃+归还名额）已执行完，进死信只会误导后续人工排查——故失败仅告警，不影响 ACK。同时类注释把两条兜底分支的「静默」措辞订正为「丢弃 + 补发脱敏通知」。
+  - ③ 前端：[AttendanceManage.vue](d:/linggong/frontend/src/views/AttendanceManage.vue) 核销看板新增「今日无任何打卡记录（onStatus=0，含无考勤行）」分支的**补记完工入口**（后端 `confirmOff` 本就允许 row=null 时补记，此前前端无入口、该能力不可达），点击时弹强确认「该工人今日无任何打卡记录，补记将支付 1 天工资，是否确认？」（红色确认键）；已有分支「已到岗未申请下工」保持直接补记不动。**注意这是一处产品放开**：等价于把「无打卡也补记」从后端允许变成前端可达，若后续认为不该放开，删掉该分支的按钮即可（弹窗逻辑随之不再触发）。
+  - 验证：`mvn compile` ✓、`npm run build` ✓（6.84s）。
+
 ### 🔄 进行中
 - 简历工程（见下一步）。
-- 待用户拍板的两处产品口径：③ 雇主「补记今日完工」可对**当天完全无打卡记录**的工人直接置满勤（on/off 双通过 → 白送 1 天工资），是否加护栏；④ 报名消息被消费者静默丢弃（黑名单兜底 / 撞一人一单唯一键）时，用户端已拿到「报名成功」单号却查不到记录，是否补一条站内通知告知。
 
 ### ⏭ 下一步
-- 候选题（用户 2026-09-13 提出）：RAG 检索效果评测 —— 建标注集（query → 相关规则 id），跑 Hit@k / Recall@k / **MRR@k** / NDCG@k，与朴素基线（纯 contains / TF）对照，并做 top-k 敏感性分析（k=1/2/3/5 看 Recall 边际饱和点，为「top-k=3 怎么定的」提供依据）。检索层评测纯本地、确定性、不花 token、可进 CI；生成层（LLM-as-judge）二期再说。
+- **RAG 评测 + 检索/工具 trace（用户 2026-09-13 定优先级：A 度量先行 + B trace 绑定做，不做 C 混合召回、押后 D 改简历）** —— 理由（用户原话转述）：没有 Hit@k / MRR / NDCG 就无法证明 RAG 优化有效，且这是纯本地、不花 token 的活，产出的是简历上含金量极高的量化数据；而只做评测不记录 `retrieved_ids`/耗时/工具调用序列，Bad Case 只能盲猜是哪一环出问题，trace 是评测的灵魂、也是面试「系统怎么排查问题」的真实工程故事。C（混合召回）依赖评测集先存在，没有评测集就上向量等于瞎猫碰死耗子，绝不做。
+  - **A. 检索评测**：建标注集（query → relevant_rule_ids，规模 50~80 条覆盖 19 条规则，含难负例如「服务费怎么算」vs「工资怎么算」、含超纲问题验证不强召回）→ 实现 `Hit@k / Recall@k / Precision@k / MRR@k / NDCG@k` → 跑基线阶梯对照（B0 朴素 contains / B1 TF-only / B2 现状 BM25 / B3 BM25+tags 加权）→ top-k 敏感性分析（k=1/2/3/5 找 Recall 饱和点，为「top-k=3」提供依据）。**纪律：k 必须与线上 top-k=3 一致，主指标报 MRR@3 / Recall@3 / Hit@3**。落地为 JUnit 测试（项目目前 `src/test` 尚不存在，这会是第一个测试），不用起 Spring、不连 DB、不调 LLM，`mvn test` 秒出报告。
+  - **B. trace**：每次问答记录 retrieved ruleIds + 工具调用序列 + 各段耗时，落表或日志，供 Bad Case 归因与面试可解释性。
 - 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行/聊天演示数据/未跟踪 chat_demo_data.sql 处置）。
 
 ---

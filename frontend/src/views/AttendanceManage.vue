@@ -87,6 +87,11 @@
               <van-button size="small" type="primary" plain :loading="auditing" @click="confirm(row)">补记完工</van-button>
               <span class="action-hint">工人忘了申请下工，可补记</span>
             </template>
+            <!-- 今日无任何打卡记录 → 允许补记（线下已干活但没打卡的真实场景），点击时强确认 -->
+            <template v-else-if="row.onStatus === 0">
+              <van-button size="small" type="primary" plain :loading="auditing" @click="confirm(row)">补记完工</van-button>
+              <span class="action-hint">今日无打卡记录</span>
+            </template>
             <span v-else class="action-hint">今日该工人无需操作</span>
           </div>
         </div>
@@ -207,6 +212,21 @@ async function audit(row, punch, pass) {
 }
 
 async function confirm(row) {
+  // 当天无任何打卡记录（onStatus=0，含无考勤行）时补记 = 直接支付 1 天工资，
+  // 与「工人已到岗、只是忘了申请下工」性质不同，必须强提示后由雇主确认，
+  // 把「可能白付一天工资」的风险显式交还给雇主（不做硬拦截，避免误伤线下已干活的场景）。
+  if (row.onStatus === 0) {
+    try {
+      await showConfirmDialog({
+        title: '确认补记完工？',
+        message: '该工人今日无任何打卡记录，补记将支付 1 天工资，是否确认？',
+        confirmButtonText: '确认补记',
+        confirmButtonColor: '#ee0a24'
+      })
+    } catch (e) {
+      return // 用户取消
+    }
+  }
   auditing.value = true
   try {
     await confirmAttendanceOff({
