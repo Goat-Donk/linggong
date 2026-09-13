@@ -34,3 +34,7 @@ application-local.yml
 # ===== 本地工具（nginx 便携版二进制，不入库；脚本类照常入库）=====
 tools/nginx-1.26.2/
 tools/nginx.zip
+
+# ===== Python 缓存（脚本入库，缓存不入库）=====
+__pycache__/
+*.pyc
