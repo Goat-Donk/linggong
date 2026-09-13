@@ -87,13 +87,17 @@ linggong:
   #   （一次性持久化：setx AMAP_KEY 你的key，之后重启终端即可）
   amap:
     key: ${AMAP_KEY:}
-  # AI 大模型（DeepSeek，OpenAI 兼容）。Key 用环境变量 DEEPSEEK_API_KEY 注入，
+  # AI 大模型（OpenAI 兼容协议）。Key 用环境变量 DEEPSEEK_API_KEY 注入，
   # 本地开发在 application-local.yml 的 linggong.ai.api-key 覆盖（同 AMAP 模式）。
+  # 默认值即「本机实际可用」的组合：阿里云百炼(DashScope) 的 compatible-mode + deepseek-v3，
+  # 国内直连、账号有免费额度。**不要**把默认值写成 api.deepseek.com/deepseek-chat——
+  # 那样不带 --spring.profiles.active=local 启动时，AI 接口会因无权限静默降级成兜底话术，
+  # 表面不报错、很难排查。换其它兼容服务只改 base-url + model-name，代码不用动。
   # 注意：不配 langchain4j.open-ai.* 属性，模型 Bean 由 AiModelConfig 显式声明（空 Key 可启动）。
   ai:
-    base-url: https://api.deepseek.com
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api-key: ${DEEPSEEK_API_KEY:}
-    model-name: deepseek-chat
+    model-name: deepseek-v3
     # AI 问答助手 RAG 检索返回的候选规则条数
     retrieval-top-k: 3
     # LLM 异常 / 未配置 Key 时的兜底话术

@@ -329,10 +329,14 @@ d:\linggong\
   **E2E 验证（真实 DashScope key + deepseek-v3，全部通过）**：/ai/ping 回显 ✓；RAG 命中（「服务费怎么算」→ 10% 雇主承担 + 余额不足结算失败，与规则库 id=30 逐字吻合）✓；五工具实时查库（钱包 100 元 / 报名 4 状态分组无日期 / 考勤 2026-09-08 双通过 / 结算 100 元 2 半天 2026-09-08 / 岗位详情状态「上架（招募中）」）✓；多轮记忆（追问「第一个岗位叫什么」不调工具从上下文作答）✓；SSE 流式（17 chunk / 7s 逐块到达）✓；匿名 401 ✓；限流第 5 次触发 ✓；无 Key fallback 保流 ✓。
   **E2E 挖出的三处真坑（已在 ae25806 修复）**：① 中文 Windows JDK17 默认 GBK，langchain4j JdkHttpClient 读流式响应用无参 InputStreamReader → SSE 中文乱码，pom spring-boot plugin 加 `-Dfile.encoding=UTF-8` jvmArguments；② 工具在 SSE 回调线程执行、UserHolder ThreadLocal 为空 → 新增 `AiContextHelper` 从服务端推导的 @ToolMemoryId（`ai:qa:memory:{userId}`）反解 userId + 五个工具统一 try/finally 清理；③ LLM 篡改/编造日期（真实 2026-09-08 答成 2023-07-10）→ 工具输出加固：新增 `AiToolDate` 预格式化中文日期、ApplicationTool 白名单去 createTime、JobTool 白名单 + 状态转中文「上架（招募中）」、SettlementTool settledAt 格式化；`AttendanceTool` 原误用雇主视角 `myAttendanceJobs()` 已改直查 `tb_attendance`；system prompt 加日期铁律（工具 JSON 无日期字段时禁止出现任何年月日 + 反例）。**运维提示**：Redis `ai:qa:memory:{userId}` 跨会话延续，LLM 曾答错时清掉该 key 再测（本轮日期编造根因即旧会话记忆污染）。
 
+- 缺陷修复：编辑岗位名额未与 Redis 同步 + AI 默认配置指向不可用模型 —— ① [JobServiceImpl](d:/linggong/backend/src/main/java/com/linggong/service/impl/JobServiceImpl.java) `update()` 新增 `resetApplyCache(jobId)`：Redis 报名名额（`apply:stock:`）此前只在发岗时预热一次、之后仅由 Lua 逐次扣减，**编辑岗位改了 headcount 完全不碰它** → 改小名额 Redis 仍按旧值放行（Lua 判过、落库 `deductHeadcount` 已扣到 0 只打 warn）造成**超额录用**，改大名额则报不满。修法：编辑的前置校验已保证该岗位无进行中报名（无 status=0 待确认 / 1 已录用），此时 DB `headcount` 即真实剩余名额，故直接删 `apply:stock:` + `apply:order:`（后者本应为空，删掉同时复位漂移），由下次报名的 `preheatApplyStock`(setIfAbsent) 从 DB 懒加载重建，不用算差额、不与并发报名抢写。② [application.yml](d:/linggong/backend/src/main/resources/application.yml) `linggong.ai.*` 默认值 `api.deepseek.com` + `deepseek-chat`（本机无权限）改为 `dashscope.aliyuncs.com/compatible-mode/v1` + `deepseek-v3`（本机实际可用），[AiModelConfig](d:/linggong/backend/src/main/java/com/linggong/config/AiModelConfig.java) 的 `@Value` 兜底默认值同步对齐 —— 修前不带 `-Dspring.profiles.active=local` 启动时 AI 接口会静默降级成兜底话术（不报错，极难排查）。`mvn compile` 通过。
+
 ### 🔄 进行中
 - 简历工程（见下一步）。
+- 待用户拍板的两处产品口径：③ 雇主「补记今日完工」可对**当天完全无打卡记录**的工人直接置满勤（on/off 双通过 → 白送 1 天工资），是否加护栏；④ 报名消息被消费者静默丢弃（黑名单兜底 / 撞一人一单唯一键）时，用户端已拿到「报名成功」单号却查不到记录，是否补一条站内通知告知。
 
 ### ⏭ 下一步
+- 候选题（用户 2026-09-13 提出）：RAG 检索效果评测 —— 建标注集（query → 相关规则 id），跑 Hit@k / Recall@k / **MRR@k** / NDCG@k，与朴素基线（纯 contains / TF）对照，并做 top-k 敏感性分析（k=1/2/3/5 看 Recall 边际饱和点，为「top-k=3 怎么定的」提供依据）。检索层评测纯本地、确定性、不花 token、可进 CI；生成层（LLM-as-judge）二期再说。
 - 简历工程：把 linggong 写进简历顶替「雅鉴生活志」，主要工作逐条按 linggong 真实代码改写（B7 落定后可补「Redis Lua 原子判重 + DB 生成列部分唯一兜底」双保险句），功能归入项目简介。AI 能力句可参考：langchain4j + DashScope(deepseek-v3) 接入、BM25 检索增强 RAG、Agent 函数调用（钱包/报名/考勤/结算/岗位实时查询）、SSE 流式对话、Redis 会话记忆（TTL）、注解限流 + 降级兜底。演示数据收尾清理（job246 残留考勤行/聊天演示数据/未跟踪 chat_demo_data.sql 处置）。
 
 ---

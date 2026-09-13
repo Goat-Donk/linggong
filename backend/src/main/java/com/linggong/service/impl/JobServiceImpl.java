@@ -195,6 +195,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         }
         // 删缓存，保证详情下次查询读到最新数据（缓存一致性）
         cacheClient.delete(RedisConstants.CACHE_JOB_KEY + id);
+        // 重置报名名额缓存：编辑可能改了 headcount，必须与 DB 同步（详见 resetApplyCache）
+        resetApplyCache(id);
         // 维护 GEO：先从旧分类移除，再按新坐标写入新分类（仅上架岗位）
         removeJobGeo(oldCategoryId, id);
         if (job.getStatus() == 0) {
@@ -513,6 +515,26 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements IJobS
         stringRedisTemplate.opsForValue().setIfAbsent(
                 RedisConstants.APPLY_STOCK_KEY + job.getId(),
                 String.valueOf(job.getHeadcount()));
+    }
+
+    /**
+     * 重置该岗位的报名缓存（名额 key + 一人一单集合）。
+     *
+     * <p>为什么必须重置：Redis 名额（apply:stock）只在发岗时预热一次、之后由 seckill.lua 逐次扣减，
+     * 编辑岗位改了 headcount 后两边就分叉了——改小名额 Redis 仍按旧值放行（Lua 判过、落库时
+     * deductHeadcount 已扣到 0 只打 warn），结果是<b>超额录用</b>；改大名额则报不满。
+     *
+     * <p>为什么是「删」而不是「改」：编辑的前置校验已保证该岗位<b>没有任何进行中的报名</b>
+     * （无 status=0 待确认、无 status=1 已录用），此时 DB headcount 就是真实剩余名额，
+     * 直接删 key 让下次报名的 {@link #preheatApplyStock}(setIfAbsent) 从 DB 懒加载重建即可，
+     * 既不用算差额，也不会和并发报名抢写。
+     *
+     * <p>顺带删一人一单集合（apply:order）是安全的：同样由前置校验保证该岗位无进行中报名，
+     * 集合本应为空；若里面有残留，说明 Redis 与 DB 已漂移，删掉正好复位。
+     */
+    private void resetApplyCache(Long jobId) {
+        stringRedisTemplate.delete(RedisConstants.APPLY_STOCK_KEY + jobId);
+        stringRedisTemplate.delete(RedisConstants.APPLY_ORDER_KEY + jobId);
     }
 
     /**
