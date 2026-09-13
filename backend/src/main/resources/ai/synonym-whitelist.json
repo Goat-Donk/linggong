@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "purpose": "Step D 语料扩写的同义词白名单：把用户口语/近义说法补进 tb_ai_rule.tags，使 searchText（= title + ' ' + tags + ' ' + content）能覆盖它们。",
+    "status": "待执行 —— 本文件是 D 阶段的输入，尚未写库；线上 tb_ai_rule 目前不含这些别名。",
+    "relation": {
+      "backend/src/test/resources/ai/aliases.json": "那是 A-3 的 B4 实验输入，**已冻结**。它是纯测试资源（只在评测时喂给检索器），且改动它会让已发布的 docs/rag-eval-baseline.md 基线数字失效。本文件是面向生产的白名单，两者不要合并。"
+    },
+    "principle": "词驱动，不是 query 驱动：别名是「词」的属性 —— 「担保金」会被说成「押金」，这件事与它出现在哪条规则、哪条 query 里无关。所以白名单按**规范词**组织，目标规则由该词在语料中的出现位置决定，而不是按评测集里出现过的 query 抄。",
+    "mechanism": "别名只写入 tags，不进入给 LLM 的 Content 正文（正文仍只有 title + content）—— 即只影响召回、不影响生成。"
+  },
+  "entries": [
+    {
+      "canonical": "担保金",
+      "aliases": ["押金"],
+      "targets": [22, 23, 31],
+      "targetNote": "22 发岗流程与担保金托管 / 23 编辑岗位补退担保金 / 31 钱包充值提现；三者正文都出现「担保金」。",
+      "evidence": {
+        "eval": "q228「押金压多少」，标注 relevant=[22]，note：「口语『押金』↔ 前端『担保金』；此词前端 0 处，是纯词表鸿沟」。B4 别名表（aliases.json）已由该条推导出「押金」，但因是词驱动，同时补给了 23 与 31。",
+        "trace": "tb_ai_trace.trace_id=da8a8a55aef245128b1442a264479dd6（2026-09-13 19:32:55）：query「押金压多少」经真实 /ai/assistant/chat 链路，生产检索器（B2 现状 BM25）返回 retrieved_rule_ids=[]，即零召回。",
+        "traceNote": "这条 trace 的价值是**口径互证**：离线评测预测 B2 在该 query 上零召回，线上同一 query 走同一检索器确实零召回 —— 说明离线指标口径与生产行为一致。**它不是「真实用户流量」的证据**：该 query 逐字来自评测集 q228（由联调时人工发起，系统目前没有真实用户），把它叙述成「线上数据复现」在面试里经不起追问。"
+      },
+      "caveat": "31 的正文提到「担保金」但 tags 里没有，而它的主题是钱包充值提现。把「押金」补进 31 的 tags，有让「押金压多少」误召回到钱包规则的风险（q228 的 relevant 只标了 22）。**D 阶段需人工决定 31 是否保留**，并对比保留/剔除两种情况下 B2→D 的 Hit@3 与拒答准确率。"
+    }
+  ]
+}
